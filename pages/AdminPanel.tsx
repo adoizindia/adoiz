@@ -31,6 +31,7 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onBack, onLogout, 
   const [allUsers, setAllUsers] = useState<User[]>([]);
   const [allListings, setAllListings] = useState<Listing[]>([]);
   const [securityLogs, setSecurityLogs] = useState<SecurityLog[]>([]);
+  const [allTransactions, setAllTransactions] = useState<WalletTransaction[]>([]);
   
   // User Management State
   const [editingUser, setEditingUser] = useState<User | null>(null);
@@ -56,11 +57,17 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onBack, onLogout, 
   const [catForm, setCatForm] = useState<Partial<Category>>({ name: '', icon: 'fa-tag' });
 
   // Business State
-  const [businessTab, setBusinessTab] = useState<'PRICING' | 'BANNERS' | 'GATEWAYS'>('PRICING');
+  const [businessTab, setBusinessTab] = useState<'PRICING' | 'BANNERS' | 'GATEWAYS' | 'WALLETS'>('PRICING');
   const [sysConfig, setSysConfig] = useState<SystemConfig>(dbService.getSystemConfig());
   const [allBanners, setAllBanners] = useState<BannerAd[]>([]);
   const [showBannerModal, setShowBannerModal] = useState(false);
   const [bannerForm, setBannerForm] = useState({ cityId: '', imageUrl: '', linkUrl: '', duration: 7 });
+
+  // Wallet Transaction Filter State
+  const [walletViewSubTab, setWalletViewSubTab] = useState<'LOGS' | 'BALANCES' | 'ANALYTICS'>('LOGS');
+  const [walletSearch, setWalletSearch] = useState('');
+  const [walletTypeFilter, setWalletTypeFilter] = useState<'ALL' | 'CREDIT' | 'DEBIT'>('ALL');
+  const [walletTimeFilter, setWalletTimeFilter] = useState<'DAILY' | 'MONTHLY' | 'YEARLY' | 'ALL'>('ALL');
 
   // Database Management State
   const [databaseTab, setDatabaseTab] = useState<'BACKUP' | 'AUTH' | 'LOGS'>('BACKUP');
@@ -87,18 +94,20 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onBack, onLogout, 
 
   const loadAllData = async (silent = false) => {
     if (!silent) setLoading(true);
-    const [u, l, c, ctr, b] = await Promise.all([
+    const [u, l, c, ctr, b, tx] = await Promise.all([
       dbService.getAllUsers(), 
       dbService.getAllListings(),
       dbService.getCategories(),
       dbService.getCountries(),
-      dbService.getAllBanners()
+      dbService.getAllBanners(),
+      dbService.getAllTransactions()
     ]);
     setAllUsers(u);
     setAllListings(l);
     setAllCategories(c);
     setCountries(ctr);
     setAllBanners(b);
+    setAllTransactions(tx);
     setSysConfig(dbService.getSystemConfig());
     setBackups(dbService.getBackupHistory());
     setSecurityLogs(dbService.getSecurityLogs());
@@ -117,6 +126,47 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onBack, onLogout, 
       securityWarnings: securityLogs.filter(log => log.severity === 'HIGH' || log.severity === 'CRITICAL').length
     };
   }, [allUsers, allListings, securityLogs]);
+
+  // Wallet Logic Memo
+  const filteredWalletTransactions = useMemo(() => {
+    return allTransactions.filter(tx => {
+      const search = walletSearch.toLowerCase();
+      const matchSearch = !walletSearch || tx.id.toLowerCase().includes(search) || tx.userId.toLowerCase().includes(search);
+      const matchType = walletTypeFilter === 'ALL' || tx.type === walletTypeFilter;
+      
+      let matchTime = true;
+      if (walletTimeFilter !== 'ALL') {
+        const now = new Date();
+        const txDate = new Date(tx.timestamp);
+        if (walletTimeFilter === 'DAILY') {
+          matchTime = txDate.toDateString() === now.toDateString();
+        } else if (walletTimeFilter === 'MONTHLY') {
+          matchTime = txDate.getMonth() === now.getMonth() && txDate.getFullYear() === now.getFullYear();
+        } else if (walletTimeFilter === 'YEARLY') {
+          matchTime = txDate.getFullYear() === now.getFullYear();
+        }
+      }
+      return matchSearch && matchType && matchTime;
+    }).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }, [allTransactions, walletSearch, walletTypeFilter, walletTimeFilter]);
+
+  const walletAnalytics = useMemo(() => {
+    const subset = allTransactions.filter(tx => {
+      let matchTime = true;
+      if (walletTimeFilter !== 'ALL') {
+        const now = new Date();
+        const txDate = new Date(tx.timestamp);
+        if (walletTimeFilter === 'DAILY') matchTime = txDate.toDateString() === now.toDateString();
+        else if (walletTimeFilter === 'MONTHLY') matchTime = txDate.getMonth() === now.getMonth() && txDate.getFullYear() === now.getFullYear();
+        else if (walletTimeFilter === 'YEARLY') matchTime = txDate.getFullYear() === now.getFullYear();
+      }
+      return matchTime;
+    });
+
+    const credit = subset.filter(t => t.type === 'CREDIT').reduce((acc, t) => acc + t.amount, 0);
+    const debit = subset.filter(t => t.type === 'DEBIT').reduce((acc, t) => acc + t.amount, 0);
+    return { credit, debit, count: subset.length };
+  }, [allTransactions, walletTimeFilter]);
 
   // --- Database Logic Handlers ---
   const handleTriggerBackup = async () => {
@@ -996,10 +1046,11 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onBack, onLogout, 
       case 'BUSINESS':
         return (
           <div className="space-y-8 animate-in fade-in duration-500 pb-24">
-            <div className="flex items-center bg-white p-2 rounded-[2rem] border border-gray-100 shadow-sm w-fit mb-8">
-               <button onClick={() => setBusinessTab('PRICING')} className={`px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${businessTab === 'PRICING' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-50'}`}>Pricing & Limits</button>
-               <button onClick={() => setBusinessTab('BANNERS')} className={`px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${businessTab === 'BANNERS' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-50'}`}>Banner Ads</button>
-               <button onClick={() => setBusinessTab('GATEWAYS')} className={`px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${businessTab === 'GATEWAYS' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-50'}`}>Payment Gateways</button>
+            <div className="flex items-center bg-white p-2 rounded-[2rem] border border-gray-100 shadow-sm w-fit mb-8 overflow-x-auto hide-scrollbar">
+               <button onClick={() => setBusinessTab('PRICING')} className={`px-6 md:px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${businessTab === 'PRICING' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-50'}`}>Pricing & Limits</button>
+               <button onClick={() => setBusinessTab('BANNERS')} className={`px-6 md:px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${businessTab === 'BANNERS' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-50'}`}>Banner Ads</button>
+               <button onClick={() => setBusinessTab('GATEWAYS')} className={`px-6 md:px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${businessTab === 'GATEWAYS' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-50'}`}>Payment Gateways</button>
+               <button onClick={() => setBusinessTab('WALLETS')} className={`px-6 md:px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${businessTab === 'WALLETS' ? 'bg-blue-600 text-white shadow-lg' : 'text-gray-400 hover:bg-gray-50'}`}>Wallet Transaction</button>
             </div>
 
             {businessTab === 'PRICING' && (
@@ -1040,7 +1091,6 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onBack, onLogout, 
                    </div>
                 </div>
 
-                {/* NEW: User Verification (Blue Tick) Section */}
                 <div className="bg-white p-10 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-8 md:col-span-2">
                    <div className="flex justify-between items-center border-b border-gray-50 pb-4">
                       <h3 className="text-xl font-black uppercase tracking-tighter">User Verification (Blue Tick)</h3>
@@ -1175,6 +1225,200 @@ export const AdminPanel: React.FC<AdminPanelProps> = ({ user, onBack, onLogout, 
                        </div>
                     );
                  })}
+              </div>
+            )}
+
+            {businessTab === 'WALLETS' && (
+              <div className="space-y-8 animate-in fade-in">
+                 {/* Stats Summary Cards */}
+                 <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Period Credit</p>
+                       <h4 className="text-3xl font-black text-emerald-600">₹{walletAnalytics.credit.toLocaleString()}</h4>
+                    </div>
+                    <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Total Period Debit</p>
+                       <h4 className="text-3xl font-black text-rose-500">₹{walletAnalytics.debit.toLocaleString()}</h4>
+                    </div>
+                    <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Net Flow</p>
+                       <h4 className={`text-3xl font-black ${(walletAnalytics.credit - walletAnalytics.debit) >= 0 ? 'text-blue-600' : 'text-rose-600'}`}>
+                          ₹{(walletAnalytics.credit - walletAnalytics.debit).toLocaleString()}
+                       </h4>
+                    </div>
+                 </div>
+
+                 {/* Filters & Navigation */}
+                 <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col lg:flex-row items-center justify-between gap-6">
+                    <div className="flex bg-gray-50 p-1 rounded-2xl w-full lg:w-auto">
+                       {[
+                          { id: 'LOGS', label: 'History' },
+                          { id: 'BALANCES', label: 'User Balances' },
+                          { id: 'ANALYTICS', label: 'Reports' }
+                       ].map(sub => (
+                          <button 
+                             key={sub.id}
+                             onClick={() => setWalletViewSubTab(sub.id as any)}
+                             className={`flex-1 lg:flex-none px-6 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${walletViewSubTab === sub.id ? 'bg-white text-blue-600 shadow-sm' : 'text-gray-400 hover:text-gray-600'}`}
+                          >
+                             {sub.label}
+                          </button>
+                       ))}
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-4 w-full lg:w-auto">
+                       <div className="relative flex-1 lg:w-64">
+                          <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-300 text-xs"></i>
+                          <input 
+                             type="text" 
+                             placeholder="Search TxID or UserID..."
+                             value={walletSearch}
+                             onChange={e => setWalletSearch(e.target.value)}
+                             className="w-full bg-gray-50 border-none rounded-xl pl-10 pr-4 py-2.5 text-xs font-bold outline-none focus:ring-2 focus:ring-blue-100"
+                          />
+                       </div>
+                       <select 
+                          className="bg-gray-50 border-none rounded-xl px-4 py-2.5 text-[10px] font-black uppercase"
+                          value={walletTypeFilter}
+                          onChange={e => setWalletTypeFilter(e.target.value as any)}
+                       >
+                          <option value="ALL">All Types</option>
+                          <option value="CREDIT">Credit Only</option>
+                          <option value="DEBIT">Debit Only</option>
+                       </select>
+                       <select 
+                          className="bg-gray-50 border-none rounded-xl px-4 py-2.5 text-[10px] font-black uppercase"
+                          value={walletTimeFilter}
+                          onChange={e => setWalletTimeFilter(e.target.value as any)}
+                       >
+                          <option value="ALL">Lifetime</option>
+                          <option value="DAILY">Today</option>
+                          <option value="MONTHLY">This Month</option>
+                          <option value="YEARLY">This Year</option>
+                       </select>
+                    </div>
+                 </div>
+
+                 {/* Tab Content */}
+                 <div className="bg-white rounded-[2.5rem] border border-gray-100 overflow-hidden shadow-sm">
+                    {walletViewSubTab === 'LOGS' && (
+                       <div className="overflow-x-auto">
+                          <table className="w-full text-left">
+                             <thead className="bg-gray-50 border-b border-gray-50">
+                                <tr className="text-[9px] font-black uppercase text-gray-400">
+                                   <th className="px-8 py-5">Transaction Details</th>
+                                   <th className="px-8 py-5">User ID</th>
+                                   <th className="px-8 py-5">Type</th>
+                                   <th className="px-8 py-5">Amount</th>
+                                   <th className="px-8 py-5">Date & Time</th>
+                                   <th className="px-8 py-5 text-right">Status</th>
+                                </tr>
+                             </thead>
+                             <tbody className="divide-y divide-gray-50">
+                                {filteredWalletTransactions.map(tx => (
+                                   <tr key={tx.id} className="hover:bg-gray-50 transition-colors">
+                                      <td className="px-8 py-5">
+                                         <p className="text-[11px] font-black text-gray-900 uppercase">{tx.description}</p>
+                                         <p className="text-[9px] font-bold text-gray-400">ID: {tx.id}</p>
+                                      </td>
+                                      <td className="px-8 py-5 text-[11px] font-bold text-gray-600">{tx.userId}</td>
+                                      <td className="px-8 py-5">
+                                         <span className={`text-[8px] font-black px-2 py-0.5 rounded uppercase ${tx.type === 'CREDIT' ? 'bg-emerald-50 text-emerald-600' : 'bg-rose-50 text-rose-600'}`}>
+                                            {tx.type}
+                                         </span>
+                                      </td>
+                                      <td className={`px-8 py-5 font-black text-sm ${tx.type === 'CREDIT' ? 'text-emerald-500' : 'text-rose-500'}`}>
+                                         {tx.type === 'CREDIT' ? '+' : '-'} ₹{tx.amount.toLocaleString()}
+                                      </td>
+                                      <td className="px-8 py-5 text-[10px] font-bold text-gray-400">
+                                         {new Date(tx.timestamp).toLocaleString()}
+                                      </td>
+                                      <td className="px-8 py-5 text-right">
+                                         <span className="bg-blue-50 text-blue-600 text-[8px] font-black uppercase px-2 py-0.5 rounded">Success</span>
+                                      </td>
+                                   </tr>
+                                ))}
+                                {filteredWalletTransactions.length === 0 && (
+                                   <tr><td colSpan={6} className="py-20 text-center text-[10px] font-black uppercase text-gray-300 italic tracking-widest">No wallet transactions found</td></tr>
+                                )}
+                             </tbody>
+                          </table>
+                       </div>
+                    )}
+
+                    {walletViewSubTab === 'BALANCES' && (
+                       <div className="overflow-x-auto">
+                          <table className="w-full text-left">
+                             <thead className="bg-gray-50 border-b border-gray-50">
+                                <tr className="text-[9px] font-black uppercase text-gray-400">
+                                   <th className="px-8 py-5">User Profile</th>
+                                   <th className="px-8 py-5">User ID</th>
+                                   <th className="px-8 py-5">Verification</th>
+                                   <th className="px-8 py-5 text-right">Current Balance</th>
+                                </tr>
+                             </thead>
+                             <tbody className="divide-y divide-gray-50">
+                                {allUsers.map(u => (
+                                   <tr key={u.id} className="hover:bg-gray-50 transition-colors">
+                                      <td className="px-8 py-5 flex items-center gap-3">
+                                         <img src={u.photo} className="w-8 h-8 rounded-lg object-cover" />
+                                         <div>
+                                            <p className="text-[11px] font-black text-gray-900">{u.name}</p>
+                                            <p className="text-[9px] font-bold text-gray-400">{u.email}</p>
+                                         </div>
+                                      </td>
+                                      <td className="px-8 py-5 text-[11px] font-bold text-gray-600">{u.id}</td>
+                                      <td className="px-8 py-5">
+                                         {u.isVerified ? <i className="fas fa-check-circle text-blue-500 text-xs"></i> : <span className="text-[8px] font-black text-gray-300 uppercase">Standard</span>}
+                                      </td>
+                                      <td className="px-8 py-5 text-right font-black text-sm text-gray-900">
+                                         ₹{u.walletBalance.toLocaleString()}
+                                      </td>
+                                   </tr>
+                                ))}
+                             </tbody>
+                          </table>
+                       </div>
+                    )}
+
+                    {walletViewSubTab === 'ANALYTICS' && (
+                       <div className="p-12 space-y-12">
+                          <div className="flex flex-col md:flex-row gap-12 items-center justify-center">
+                             <div className="relative w-48 h-48">
+                                <svg className="w-full h-full transform -rotate-90">
+                                   <circle cx="96" cy="96" r="80" stroke="currentColor" strokeWidth="20" fill="transparent" className="text-gray-100" />
+                                   <circle 
+                                      cx="96" cy="96" r="80" stroke="currentColor" strokeWidth="20" fill="transparent" 
+                                      strokeDasharray={502.4}
+                                      strokeDashoffset={502.4 - (502.4 * (walletAnalytics.credit / (walletAnalytics.credit + walletAnalytics.debit || 1)))}
+                                      className="text-emerald-500" 
+                                   />
+                                </svg>
+                                <div className="absolute inset-0 flex flex-col items-center justify-center">
+                                   <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Flow Mix</p>
+                                   <p className="text-xl font-black text-gray-900">{Math.round((walletAnalytics.credit / (walletAnalytics.credit + walletAnalytics.debit || 1)) * 100)}% CR</p>
+                                </div>
+                             </div>
+                             <div className="space-y-4 flex-1 max-w-sm">
+                                <h5 className="text-[10px] font-black text-gray-400 uppercase tracking-[0.2em] mb-4">Volume Distribution</h5>
+                                <div className="space-y-2">
+                                   <div className="flex justify-between items-center text-[10px] font-black uppercase mb-1"><span>Total Credits</span><span>₹{walletAnalytics.credit.toLocaleString()}</span></div>
+                                   <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
+                                      <div className="bg-emerald-500 h-full" style={{ width: `${(walletAnalytics.credit / (walletAnalytics.credit + walletAnalytics.debit || 1)) * 100}%` }}></div>
+                                   </div>
+                                </div>
+                                <div className="space-y-2">
+                                   <div className="flex justify-between items-center text-[10px] font-black uppercase mb-1"><span>Total Debits</span><span>₹{walletAnalytics.debit.toLocaleString()}</span></div>
+                                   <div className="w-full bg-gray-100 h-2 rounded-full overflow-hidden">
+                                      <div className="bg-rose-500 h-full" style={{ width: `${(walletAnalytics.debit / (walletAnalytics.credit + walletAnalytics.debit || 1)) * 100}%` }}></div>
+                                   </div>
+                                </div>
+                                <p className="text-[9px] text-gray-400 uppercase font-bold italic pt-4">* Metrics based on {walletAnalytics.count} transactions in selected period.</p>
+                             </div>
+                          </div>
+                       </div>
+                    )}
+                 </div>
               </div>
             )}
 
