@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Listing, User } from '../types';
 import { dbService } from '../services/dbService';
+import { CITIES } from '../constants';
 
 interface ProductDetailProps {
   listing: Listing;
@@ -40,6 +41,11 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
     setIsConnecting(true);
     await onContactSeller(listing, seller);
     setIsConnecting(false);
+  };
+
+  const getFormattedCity = (cityId: string) => {
+    const city = CITIES.find(c => c.id === cityId);
+    return city ? `${city.name} - ${cityId}` : cityId;
   };
 
   return (
@@ -98,7 +104,7 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
                </div>
                <div className="bg-gray-50 p-4 rounded-2xl border border-gray-100">
                  <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Location</p>
-                 <p className="text-xs font-bold text-gray-900">{listing.cityId}</p>
+                 <p className="text-xs font-bold text-gray-900">{getFormattedCity(listing.cityId)}</p>
                </div>
             </div>
           </div>
@@ -200,7 +206,7 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
           <div className="flex justify-between items-end mb-8">
             <div>
               <p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] mb-2">More in this area</p>
-              <h2 className="text-3xl font-black text-gray-900 tracking-tight">Relevant in {listing.cityId}</h2>
+              <h2 className="text-3xl font-black text-gray-900 tracking-tight">Relevant in {getFormattedCity(listing.cityId)}</h2>
             </div>
           </div>
 

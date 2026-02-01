@@ -1,7 +1,7 @@
-
 import React, { useState, useEffect, useMemo } from 'react';
 import { dbService } from '../services/dbService';
 import { Listing, City, Category, BannerAd } from '../types';
+import { CITIES } from '../constants';
 
 interface ListingFeedProps {
   city: City;
@@ -55,6 +55,11 @@ export const ListingFeed: React.FC<ListingFeedProps> = ({
   }, [listings, sortBy]);
 
   const handleClearSearch = () => onSearchChange('');
+
+  const getFormattedCity = (cityId: string) => {
+    const city = CITIES.find(c => c.id === cityId);
+    return city ? `${city.name} - ${cityId}` : cityId;
+  };
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 pb-24">
@@ -156,6 +161,10 @@ export const ListingFeed: React.FC<ListingFeedProps> = ({
                 </div>
                 <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
                   <span><i className="far fa-clock mr-1.5"></i> {new Date(l.createdAt).toLocaleDateString()}</span>
+                  <div className="flex items-center gap-1.5 text-[10px] font-black text-gray-900 uppercase">
+                    <i className="fas fa-location-dot text-rose-500 text-[8px]"></i>
+                    {getFormattedCity(l.cityId)}
+                  </div>
                   <span className="text-blue-600 bg-blue-50 px-2 py-0.5 rounded-full"><i className="fas fa-eye mr-1 text-[8px]"></i> {l.views}</span>
                 </div>
               </div>

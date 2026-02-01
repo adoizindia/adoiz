@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { User, Listing, ListingStatus, UserRole, City, State, Country, SupportTicket, WalletTransaction, BannerAd } from '../types';
 import { dbService } from '../services/dbService';
+import { CITIES } from '../constants';
 
 interface DashboardProps {
   user: User;
@@ -205,6 +206,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
+  const getFormattedCity = (cityId?: string) => {
+    if (!cityId) return 'N/A';
+    const city = CITIES.find(c => c.id === cityId);
+    return city ? `${city.name} - ${cityId}` : cityId;
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 md:py-12 pb-32">
       {/* Header Profile Section */}
@@ -234,7 +241,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               )}
               <span className="inline-flex items-center bg-gray-50 text-gray-400 text-[9px] font-black uppercase px-3 py-1 rounded-full border border-gray-100">{user.role}</span>
             </div>
-            <p className="text-gray-500 font-medium mb-6">Location: <b>{user.cityId}</b></p>
+            <p className="text-gray-500 font-medium mb-6">Location: <b>{getFormattedCity(user.cityId)}</b></p>
             
             <div className="flex flex-wrap justify-center md:justify-start gap-3">
               <button onClick={() => setShowRechargeModal(true)} className="bg-blue-600 text-white px-8 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-blue-100 flex items-center gap-3 active:scale-95 transition-all">
@@ -321,7 +328,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
              <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
                 <h3 className="text-xl font-black mb-6 uppercase tracking-tighter">Sponsor Your City</h3>
-                <p className="text-gray-500 text-sm mb-8">Purchase a premium banner ad to be displayed on the home page for all users in <b>{user.cityId}</b>.</p>
+                <p className="text-gray-500 text-sm mb-8">Purchase a premium banner ad to be displayed on the home page for all users in <b>{getFormattedCity(user.cityId)}</b>.</p>
                 <form onSubmit={handleBuyBanner} className="space-y-6">
                    <div className="space-y-1">
                       <div className="flex justify-between items-center">
@@ -376,7 +383,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                         </div>
                         <div className="flex justify-between items-center">
                           <div className="min-w-0 pr-4">
-                            <p className="text-[9px] font-black uppercase text-gray-400">City: <b>{banner.cityId}</b></p>
+                            <p className="text-[9px] font-black uppercase text-gray-400">City: <b>{getFormattedCity(banner.cityId)}</b></p>
                             {banner.status === 'LIVE' && <p className="text-[9px] font-black uppercase text-emerald-600 mt-1">Expires: {new Date(banner.expiresAt).toLocaleDateString()}</p>}
                           </div>
                           {(banner.status === 'DRAFT' || banner.status === 'EXPIRED') && (
