@@ -76,25 +76,25 @@ export const ListingFeed: React.FC<ListingFeedProps> = ({
       )}
 
       <div className="flex flex-col gap-6 mb-8 bg-white p-5 md:p-8 rounded-[2.5rem] border border-gray-100 shadow-sm animate-in slide-in-from-top-4">
-        <div className="flex flex-col md:flex-row items-center justify-between gap-4">
-          <div className="flex items-center space-x-2 bg-gray-50 p-1.5 rounded-2xl border border-gray-100">
-            <button onClick={() => setViewMode('grid')} className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'grid' ? 'bg-white text-[#1a73e8] shadow-sm border border-gray-100' : 'text-gray-400'}`}>
-              <i className="fas fa-grip-vertical mr-2"></i> Grid
+        <div className="flex flex-row items-center justify-between gap-2 md:gap-4 w-full">
+          <div className="flex items-center space-x-1 md:space-x-2 bg-gray-50 p-1 md:p-1.5 rounded-xl md:rounded-2xl border border-gray-100 flex-shrink-0">
+            <button onClick={() => setViewMode('grid')} className={`px-2 md:px-5 py-2 md:py-2.5 rounded-lg md:rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'grid' ? 'bg-white text-[#1a73e8] shadow-sm border border-gray-100' : 'text-gray-400'}`}>
+              <i className="fas fa-grip-vertical mr-1 md:mr-2"></i> Grid
             </button>
-            <button onClick={() => setViewMode('list')} className={`px-5 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'list' ? 'bg-white text-[#1a73e8] shadow-sm border border-gray-100' : 'text-gray-400'}`}>
-              <i className="fas fa-list mr-2"></i> List
+            <button onClick={() => setViewMode('list')} className={`px-2 md:px-5 py-2 md:py-2.5 rounded-lg md:rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'list' ? 'bg-white text-[#1a73e8] shadow-sm border border-gray-100' : 'text-gray-400'}`}>
+              <i className="fas fa-list mr-1 md:mr-2"></i> List
             </button>
           </div>
 
-          <div className="relative w-full md:w-auto">
-            <i className="fas fa-sort-amount-down absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-[10px]"></i>
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortOption)} className="w-full md:w-auto bg-white border border-gray-100 pl-10 pr-10 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none focus:ring-2 focus:ring-blue-500/10 appearance-none cursor-pointer">
+          <div className="relative flex-1 md:w-auto min-w-0">
+            <i className="fas fa-sort-amount-down absolute left-3 md:left-4 top-1/2 -translate-y-1/2 text-gray-400 text-[10px]"></i>
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortOption)} className="w-full md:w-auto bg-white border border-gray-100 pl-8 md:pl-10 pr-6 md:pr-10 py-2 md:py-3 rounded-xl md:rounded-2xl text-[8px] md:text-[10px] font-black uppercase tracking-widest outline-none focus:ring-2 focus:ring-blue-500/10 appearance-none cursor-pointer truncate">
               <option value="newest">Newest First</option>
               <option value="oldest">Oldest First</option>
               <option value="price_low">Price: Low to High</option>
               <option value="price_high">Price: High to Low</option>
             </select>
-            <i className="fas fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 text-[8px] pointer-events-none"></i>
+            <i className="fas fa-chevron-down absolute right-3 md:right-4 top-1/2 -translate-y-1/2 text-gray-300 text-[8px] pointer-events-none"></i>
           </div>
         </div>
 

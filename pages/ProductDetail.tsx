@@ -49,11 +49,7 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
   };
 
   return (
-    <div className="max-w-7xl mx-auto px-4 py-8 pb-32">
-      <button onClick={onBack} className="flex items-center text-gray-500 font-bold text-xs uppercase tracking-widest mb-6 hover:text-blue-600 transition-colors group">
-        <i className="fas fa-arrow-left mr-2 group-hover:-translate-x-1 transition-transform"></i> Back to Search
-      </button>
-
+    <div className="max-w-7xl mx-auto p-0">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-16">
         <div className="lg:col-span-2 space-y-8">
           <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-2xl shadow-blue-50 border border-gray-100 relative group">
@@ -210,7 +206,7 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
             </div>
           </div>
 
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 px-4 md:px-0">
             {relatedListings.map(l => (
               <div 
                 key={l.id} 

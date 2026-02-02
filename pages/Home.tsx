@@ -112,7 +112,7 @@ export const Home: React.FC<HomeProps> = ({ city, onSearch, onCategorySelect, on
               </div>
               <div className="p-6">
                 <h3 className="font-black text-gray-900 text-sm md:text-base line-clamp-1 group-hover:text-blue-600 mb-2">{l.title}</h3>
-                <div className="flex items-center justify-between"><p className="text-2xl font-black text-gray-900">₹{l.price.toLocaleString()}</p><span className="text-[9px] font-black text-gray-400 uppercase tracking-widest bg-gray-50 px-2 py-1 rounded">{l.category}</span></div>
+                <div className="flex items-center justify-between"><p className="text-xl md:text-2xl font-black text-gray-900">₹{l.price.toLocaleString()}</p><span className="text-[9px] font-black text-gray-400 uppercase tracking-widest bg-gray-50 px-2 py-1 rounded">{l.category}</span></div>
               </div>
             </div>
           ))}

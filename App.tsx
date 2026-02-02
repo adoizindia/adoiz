@@ -191,9 +191,10 @@ const App: React.FC = () => {
   };
 
   const showNavbar = view !== 'AUTH' && view !== 'ADMIN_PANEL' && !isMaintenance;
+  const isFrontView = view !== 'ADMIN_PANEL';
 
   return (
-    <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
+    <div className={`h-screen bg-gray-50 flex flex-col overflow-hidden ${isFrontView ? 'front-view' : ''}`}>
       {showNavbar && <Navbar user={user} city={currentCity} activeTab={mapViewStateToTab()} setActiveTab={handleNavigationChange} onLogout={handleLogout} onSelectCity={() => setCurrentCity(null)} />}
       {showNavbar && <SearchBar city={currentCity} onSearch={handleSearchIntent} searchQuery={searchQuery} />}
       <main className={`flex-1 overflow-y-auto ${showNavbar ? 'pb-20 md:pb-0' : ''}`}>{renderView()}</main>
