@@ -29,7 +29,6 @@ const App: React.FC = () => {
   const [selectedChat, setSelectedChat] = useState<Chat | null>(null);
   const [userListings, setUserListings] = useState<Listing[]>([]);
   const [isMaintenance, setIsMaintenance] = useState(false);
-  const [hasAutoSelectedCity, setHasAutoSelectedCity] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
 
@@ -87,15 +86,23 @@ const App: React.FC = () => {
     setIsMaintenance(currentConfig.maintenanceMode && user?.role !== UserRole.ADMIN);
   }, [user, config.maintenanceMode]);
 
+  // Handle City Initialization for Guests and Logged-in Users
   useEffect(() => {
-    if (user && user.cityId && !currentCity && !hasAutoSelectedCity) {
-      const city = CITIES.find(c => c.id === user.cityId);
-      if (city) {
-        setCurrentCity(city);
-        setHasAutoSelectedCity(true);
+    if (user) {
+      // B. Logged-in users use profile city
+      if (user.cityId) {
+        const city = CITIES.find(c => c.id === user.cityId);
+        if (city) setCurrentCity(city);
+      }
+    } else {
+      // A. Guest users reload from browser storage
+      const storedCityId = localStorage.getItem('adoiz_guest_city_id');
+      if (storedCityId) {
+        const city = CITIES.find(c => c.id === storedCityId);
+        if (city) setCurrentCity(city);
       }
     }
-  }, [user, currentCity, hasAutoSelectedCity]);
+  }, [user]);
 
   const loadUserListings = useCallback(async () => {
     if (user) {
@@ -110,6 +117,10 @@ const App: React.FC = () => {
 
   const handleCitySelect = (city: City) => {
     setCurrentCity(city);
+    // A2 & C: Persist in storage only for guest users
+    if (!user) {
+      localStorage.setItem('adoiz_guest_city_id', city.id);
+    }
     if (['DETAIL', 'POST_AD', 'EDIT_AD'].includes(view)) setView('HOME');
   };
 
@@ -137,13 +148,12 @@ const App: React.FC = () => {
 
   const handleLoginSuccess = (u: User) => {
     setUser(u);
-    setHasAutoSelectedCity(false);
     if (u.role === UserRole.ADMIN) setView('ADMIN_PANEL');
     else if (u.role === UserRole.MODERATOR) setView('MODERATION');
     else setView('HOME');
   };
 
-  const handleLogout = () => { setUser(null); setHasAutoSelectedCity(false); setView('HOME'); };
+  const handleLogout = () => { setUser(null); setView('HOME'); };
 
   const handleNavigationChange = (tab: string) => {
     if (tab === 'home') setView('HOME');
@@ -172,6 +182,7 @@ const App: React.FC = () => {
       </div>
     );
 
+    // City selection logic: currentCity check triggers CityPicker
     if (!currentCity && view !== 'AUTH') return <CityPicker onSelect={handleCitySelect} />;
 
     switch (view) {
