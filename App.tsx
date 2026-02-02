@@ -2,6 +2,7 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { User, City, Listing, UserRole, Chat } from './types';
 import { BottomNav } from './components/layout/BottomNav';
 import { Navbar } from './components/layout/Navbar';
+import { SearchBar } from './components/layout/SearchBar';
 import { CityPicker } from './pages/CityPicker';
 import { Home } from './pages/Home';
 import { ProductDetail } from './pages/ProductDetail';
@@ -193,7 +194,8 @@ const App: React.FC = () => {
 
   return (
     <div className="h-screen bg-gray-50 flex flex-col overflow-hidden">
-      {showNavbar && <Navbar user={user} city={currentCity} activeTab={mapViewStateToTab()} setActiveTab={handleNavigationChange} onLogout={handleLogout} onSearch={handleSearchIntent} onSelectCity={() => setCurrentCity(null)} searchQuery={searchQuery} />}
+      {showNavbar && <Navbar user={user} city={currentCity} activeTab={mapViewStateToTab()} setActiveTab={handleNavigationChange} onLogout={handleLogout} onSelectCity={() => setCurrentCity(null)} />}
+      {showNavbar && <SearchBar city={currentCity} onSearch={handleSearchIntent} searchQuery={searchQuery} />}
       <main className={`flex-1 overflow-y-auto ${showNavbar ? 'pb-20 md:pb-0' : ''}`}>{renderView()}</main>
       {showNavbar && <BottomNav activeTab={mapViewStateToTab()} setActiveTab={handleNavigationChange} />}
     </div>

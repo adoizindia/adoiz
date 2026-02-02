@@ -8,9 +8,7 @@ interface NavbarProps {
   activeTab: string;
   setActiveTab: (tab: string) => void;
   onLogout: () => void;
-  onSearch: (query: string) => void;
   onSelectCity: () => void;
-  searchQuery: string;
 }
 
 export const Navbar: React.FC<NavbarProps> = ({ 
@@ -19,33 +17,9 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeTab,
   setActiveTab,
   onLogout,
-  onSearch,
-  onSelectCity,
-  searchQuery
+  onSelectCity
 }) => {
-  const [localQuery, setLocalQuery] = useState(searchQuery || '');
-  const [isVisible, setIsVisible] = useState(true);
-  const [lastScrollY, setLastScrollY] = useState(0);
   const config = dbService.getSystemConfig();
-
-  // YouTube-style Hide on Scroll logic
-  useEffect(() => {
-    const handleScroll = () => {
-      const currentScrollY = window.scrollY;
-      
-      // Show if scrolling up, hide if scrolling down and passed 80px
-      if (currentScrollY > lastScrollY && currentScrollY > 80) {
-        setIsVisible(false);
-      } else {
-        setIsVisible(true);
-      }
-      
-      setLastScrollY(currentScrollY);
-    };
-
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [lastScrollY]);
 
   const menuItems = [
     { id: 'home', icon: 'fa-house', label: 'Home' },
@@ -55,22 +29,13 @@ export const Navbar: React.FC<NavbarProps> = ({
     { id: 'profile', icon: 'fa-user-circle', label: 'Account', protected: true },
   ];
 
-  const handleSearchSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
-    onSearch(localQuery);
-  };
-
   return (
-    <nav 
-      className={`sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm transition-transform duration-300 ease-in-out ${
-        isVisible ? 'translate-y-0' : '-translate-y-full'
-      }`}
-    >
+    <nav className="sticky top-0 z-50 bg-white border-b border-gray-200 shadow-sm transition-transform duration-300 ease-in-out translate-y-0">
       <div className="max-w-[1400px] mx-auto px-4 lg:px-10">
-        <div className="flex justify-between items-center h-16 lg:h-20 gap-4">
+        <div className="flex justify-between items-center h-16 lg:h-20 gap-4 relative">
           
           {/* Logo & City Selector Section */}
-          <div className="flex-shrink-0 flex items-center space-x-2 md:space-x-4">
+          <div className="flex-shrink-0 flex items-center space-x-2 md:space-x-4 transition-opacity duration-200">
             <div 
               onClick={() => setActiveTab('home')} 
               className="cursor-pointer hover:opacity-80 active:scale-95 transition-all flex items-center"
@@ -101,24 +66,25 @@ export const Navbar: React.FC<NavbarProps> = ({
             )}
           </div>
 
-          <div className="hidden lg:flex items-center space-x-1">
-            {menuItems.map((item) => {
-              if (item.protected && !user) return null;
-              if (item.roles && user && !item.roles.includes(user.role)) return null;
-              const isActive = activeTab === item.id;
-              return (
-                <button
-                  key={item.id}
-                  onClick={() => setActiveTab(item.id)}
-                  className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isActive ? 'bg-blue-50 text-[#1a73e8]' : 'text-gray-500 hover:bg-gray-50'}`}
-                >
-                  <i className={`fas ${item.icon} mr-2`}></i>{item.label}
-                </button>
-              );
-            })}
-          </div>
-          
-          <div className="flex items-center space-x-2">
+          {/* User & Menu Sections */}
+          <div className="flex items-center space-x-2 transition-opacity duration-200">
+            <div className="hidden lg:flex items-center space-x-1 mr-2">
+              {menuItems.map((item) => {
+                if (item.protected && !user) return null;
+                if (item.roles && user && !item.roles.includes(user.role)) return null;
+                const isActive = activeTab === item.id;
+                return (
+                  <button
+                    key={item.id}
+                    onClick={() => setActiveTab(item.id)}
+                    className={`px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all ${isActive ? 'bg-blue-50 text-[#1a73e8]' : 'text-gray-500 hover:bg-gray-50'}`}
+                  >
+                    <i className={`fas ${item.icon} mr-2`}></i>{item.label}
+                  </button>
+                );
+              })}
+            </div>
+            
             {user ? (
               <div className="flex items-center space-x-3">
                 <button onClick={() => setActiveTab('profile')} className="flex items-center space-x-2 p-1 rounded-full hover:bg-gray-50 transition-all border border-transparent hover:border-gray-100">

@@ -1,3 +1,4 @@
+
 import { 
   User, Listing, Category, BannerAd, SupportTicket, 
   WalletTransaction, SystemConfig, City, State, Country,
@@ -584,6 +585,26 @@ class DbService {
     });
     
     return { ...user };
+  }
+
+  async getSearchSuggestions(cityId: string, query: string): Promise<string[]> {
+    if (!query.trim()) return [];
+    const q = query.toLowerCase();
+    const suggestionsSet = new Set<string>();
+    
+    // Check categories
+    this.categories.forEach(cat => {
+      if (cat.name.toLowerCase().includes(q)) suggestionsSet.add(cat.name);
+    });
+
+    // Check listings in city
+    this.listings.forEach(l => {
+      if (l.cityId === cityId && l.status === ListingStatus.APPROVED && l.title.toLowerCase().includes(q)) {
+        suggestionsSet.add(l.title);
+      }
+    });
+
+    return Array.from(suggestionsSet).slice(0, 8);
   }
 }
 
