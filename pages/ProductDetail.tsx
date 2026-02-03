@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Listing, User } from '../types';
+import { Listing, User, BannerAd } from '../types';
 import { dbService } from '../services/dbService';
 import { CITIES } from '../constants';
 
@@ -21,6 +21,7 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
   const [isNumberRevealed, setIsNumberRevealed] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
   const [relatedListings, setRelatedListings] = useState<Listing[]>([]);
+  const [banners, setBanners] = useState<BannerAd[]>([]);
 
   useEffect(() => {
     // Fetch other listings in the same city
@@ -29,9 +30,13 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
       const filtered = all.filter(l => l.id !== listing.id).slice(0, 4);
       setRelatedListings(filtered);
     });
+
+    // Fetch active banners for the city
+    dbService.getActiveBanners(listing.cityId).then(setBanners);
+
     // Scroll to top when listing changes
     window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, [listing.id]);
+  }, [listing.id, listing.cityId]);
 
   const handleReveal = () => {
     setIsNumberRevealed(true);
@@ -196,12 +201,23 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
         </div>
       </div>
 
+      {/* City-Locked Banner Advertisement (Inserted exactly above 'More in this area') */}
+      {banners.length > 0 && (
+        <div className="rounded-[2rem] overflow-hidden border border-gray-100 shadow-sm bg-white p-2">
+           <div className="relative aspect-video w-full">
+              <a href={banners[0].linkUrl} target="_blank" rel="noopener noreferrer">
+                 <img src={banners[0].imageUrl} className="w-full h-full object-cover rounded-2xl" alt="Advertisement" />
+                 <div className="absolute top-2 right-2 bg-black/20 backdrop-blur-md text-white text-[7px] font-black uppercase px-2 py-0.5 rounded">Ad Placement</div>
+              </a>
+           </div>
+        </div>
+      )}
+
       {/* Related Listings Section */}
       {relatedListings.length > 0 && (
         <div className="animate-in fade-in slide-in-from-bottom-8 duration-700">
-          <div className="flex justify-between items-end mb-8">
+          <div className="flex justify-between items-end">
             <div>
-              <p className="text-[10px] font-black text-blue-600 uppercase tracking-[0.2em] mb-2">More in this area</p>
               <h2 className="text-3xl font-black text-gray-900 tracking-tight">Relevant in {getFormattedCity(listing.cityId)}</h2>
             </div>
           </div>
