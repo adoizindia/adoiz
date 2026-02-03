@@ -40,7 +40,7 @@ export const Home: React.FC<HomeProps> = ({ city, onSearch, onCategorySelect, on
   return (
     <div className="flex flex-col items-center px-4 pt-6 md:pt-12 pb-20 overflow-x-hidden">
       {/* Category Quick Filters - Relocated to the top since hero is removed */}
-      <div className="w-full max-w-7xl px-4 flex flex-wrap justify-center gap-2 mb-8">
+      <div className="w-full max-w-7xl px-4 flex flex-wrap justify-center gap-2 mb-0">
         {categories.map(cat => (
           <button 
             key={cat.id} 
@@ -54,8 +54,8 @@ export const Home: React.FC<HomeProps> = ({ city, onSearch, onCategorySelect, on
 
       {/* City-Locked Banner Carousel */}
       {banners.length > 0 && (
-        <div className="w-full max-w-7xl px-4 relative group mb-12">
-           <div className="relative w-full aspect-[2.5/1] md:aspect-[6/1] rounded-[2.5rem] overflow-hidden shadow-2xl border border-gray-100 bg-gray-100">
+        <div className="w-full max-w-7xl px-4 relative group mb-0 mt-8">
+           <div className="relative w-full aspect-video rounded-[2.5rem] overflow-hidden shadow-2xl border border-gray-100 bg-gray-100">
               {banners.map((banner, index) => (
                 <a 
                   key={banner.id}
@@ -97,9 +97,9 @@ export const Home: React.FC<HomeProps> = ({ city, onSearch, onCategorySelect, on
         </div>
       )}
 
-      <div className="w-full max-w-7xl px-4">
+      <div className="w-full max-w-7xl px-4 mt-12">
         <div className="flex justify-between items-end mb-10">
-          <div><p className="text-[10px] font-black text-blue-600 uppercase tracking-widest mb-2">Verified Ads</p><h2 className="text-4xl font-black text-gray-900 tracking-tight">Recent in {city.name}</h2></div>
+          <div><h2 className="text-4xl font-black text-gray-900 tracking-tight">Recent in {city.name}</h2></div>
           <button onClick={() => onSearch('')} className="flex items-center space-x-3 text-gray-400 hover:text-blue-600 group"><span className="text-[10px] font-black uppercase tracking-widest group-hover:mr-2 transition-all">Explore All</span><i className="fas fa-arrow-right text-xs"></i></button>
         </div>
 

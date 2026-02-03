@@ -66,7 +66,7 @@ export const ListingFeed: React.FC<ListingFeedProps> = ({
       {/* City-Locked Banner Advertisement */}
       {banners.length > 0 && (
         <div className="mb-8 rounded-[2rem] overflow-hidden border border-gray-100 shadow-sm bg-white p-2">
-           <div className="relative aspect-[10/1] w-full">
+           <div className="relative aspect-video w-full">
               <a href={banners[0].linkUrl} target="_blank" rel="noopener noreferrer">
                  <img src={banners[0].imageUrl} className="w-full h-full object-cover rounded-2xl" alt="Advertisement" />
                  <div className="absolute top-2 right-2 bg-black/20 backdrop-blur-md text-white text-[7px] font-black uppercase px-2 py-0.5 rounded">Ad Placement</div>

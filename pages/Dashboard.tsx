@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { User, Listing, ListingStatus, UserRole, City, State, Country, SupportTicket, WalletTransaction, BannerAd } from '../types';
 import { dbService } from '../services/dbService';
 import { CITIES } from '../constants';
@@ -31,6 +31,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [userTransactions, setUserTransactions] = useState<WalletTransaction[]>([]);
   const [userBanners, setUserBanners] = useState<BannerAd[]>([]);
   
+  // Banner Upload & Crop State
+  const [cropModal, setCropModal] = useState<{ show: boolean; image: string | null }>({ show: false, image: null });
+  const [cropOffset, setCropOffset] = useState(0); // Vertical offset percentage for 16:9 crop
+  const bannerCanvasRef = useRef<HTMLCanvasElement>(null);
+
   // Location lists for dropdowns
   const [countries, setCountries] = useState<Country[]>([]);
   const [states, setStates] = useState<State[]>([]);
@@ -55,7 +60,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
     loadDashboardData(); 
   }, [user.id]);
 
-  // Handle location initial loads and auto-selection
   useEffect(() => {
     const listCountries = dbService.getCountries();
     setCountries(listCountries);
@@ -159,8 +163,80 @@ export const Dashboard: React.FC<DashboardProps> = ({
     setCities(dbService.getCities(id));
   };
 
+  // --- Banner Upload & Crop Functions ---
+  const handleBannerFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!['image/jpeg', 'image/jpg', 'image/png', 'image/webp'].includes(file.type)) {
+      alert("Invalid format. Please upload JPG, PNG or WEBP.");
+      return;
+    }
+
+    if (file.size > 2 * 1024 * 1024) {
+      alert("File size exceeds 2MB limit.");
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      setCropModal({ show: true, image: reader.result as string });
+      setCropOffset(0);
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const applyCrop = () => {
+    if (!bannerCanvasRef.current || !cropModal.image) return;
+    
+    const canvas = bannerCanvasRef.current;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+
+    const img = new Image();
+    img.src = cropModal.image;
+    img.onload = () => {
+      // High-resolution 16:9 target: 1280x720
+      const targetW = 1280;
+      const targetH = 720;
+      canvas.width = targetW;
+      canvas.height = targetH;
+
+      const imgAspect = img.width / img.height;
+      const targetAspect = 16 / 9;
+
+      let sx, sy, sw, sh;
+
+      if (imgAspect > targetAspect) {
+        // Image is wider than target ratio
+        sh = img.height;
+        sw = sh * targetAspect;
+        sy = 0;
+        sx = (img.width - sw) / 2;
+      } else {
+        // Image is taller than target ratio
+        sw = img.width;
+        sh = sw / targetAspect;
+        sx = 0;
+        const maxScroll = img.height - sh;
+        sy = (maxScroll * cropOffset) / 100;
+      }
+
+      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, targetW, targetH);
+      const croppedData = canvas.toDataURL('image/jpeg', 0.9);
+      setBannerForm(prev => ({ ...prev, imageUrl: croppedData }));
+      setCropModal({ show: false, image: null });
+      setBannerPreview(true);
+    };
+  };
+
   const handleBuyBanner = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!bannerForm.imageUrl) {
+      alert("Please upload and crop a banner first.");
+      return;
+    }
+
     const isSufficient = user.walletBalance >= config.bannerAdPrice;
     
     try {
@@ -212,6 +288,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
     return city ? `${city.name} - ${cityId}` : cityId;
   };
 
+  // Helper for broken images
+  const handleImageError = (e: React.SyntheticEvent<HTMLImageElement, Event>) => {
+    e.currentTarget.src = 'https://placehold.co/1280x720/f3f4f6/94a3b8?text=Banner+Asset+Unavailable';
+  };
+
   return (
     <div className="max-w-7xl mx-auto px-4 py-8 md:py-12 pb-32">
       {/* Header Profile Section */}
@@ -254,8 +335,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
         </div>
       </div>
 
-      {/* Tabs */}
-      <div className="flex items-center space-x-2 mb-8 bg-white p-1.5 rounded-[2rem] border border-gray-100 shadow-sm w-fit overflow-x-auto hide-scrollbar">
+      {/* Tabs Menu - Touch-friendly horizontal scroll */}
+      <div className="flex items-center flex-nowrap space-x-2 mb-8 bg-white p-1.5 rounded-[2rem] border border-gray-100 shadow-sm w-full lg:w-fit overflow-x-auto hide-scrollbar touch-pan-x overscroll-x-contain">
         {[
           { id: 'ADS', icon: 'fa-tags', label: 'My Listings' },
           { id: 'BANNER', icon: 'fa-rectangle-ad', label: 'Sponsorship' },
@@ -328,19 +409,50 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
              <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
                 <h3 className="text-xl font-black mb-6 uppercase tracking-tighter">Sponsor Your City</h3>
-                <p className="text-gray-500 text-sm mb-8">Purchase a premium banner ad to be displayed on the home page for all users in <b>{getFormattedCity(user.cityId)}</b>.</p>
+                <p className="text-gray-500 text-sm mb-8">Upload a premium banner ad to be displayed on the home page for all users in <b>{getFormattedCity(user.cityId)}</b>.</p>
                 <form onSubmit={handleBuyBanner} className="space-y-6">
-                   <div className="space-y-1">
+                   <div className="space-y-3">
                       <div className="flex justify-between items-center">
-                        <label className="text-[10px] font-black uppercase text-gray-400">Creative Image URL</label>
-                        <button type="button" onClick={() => setBannerPreview(!bannerPreview)} className="text-[9px] font-black uppercase text-blue-600 hover:underline">Toggle Preview</button>
+                        <label className="text-[10px] font-black uppercase text-gray-400">Banner Creative</label>
+                        {bannerForm.imageUrl && (
+                          <button type="button" onClick={() => setBannerPreview(!bannerPreview)} className="text-[9px] font-black uppercase text-blue-600 hover:underline">Toggle Preview</button>
+                        )}
                       </div>
-                      <input required type="url" className="w-full bg-gray-50 border p-4 rounded-xl font-bold" value={bannerForm.imageUrl} onChange={e => setBannerForm({...bannerForm, imageUrl: e.target.value})} placeholder="https://..." />
+                      
+                      <div className="flex flex-col gap-4">
+                        <label className="flex flex-col items-center justify-center w-full aspect-video bg-gray-50 border-2 border-dashed border-gray-200 rounded-2xl cursor-pointer hover:bg-gray-100 transition-colors overflow-hidden group relative">
+                          {bannerForm.imageUrl ? (
+                            <img src={bannerForm.imageUrl} className="w-full h-full object-cover" alt="Banner Preview" onError={handleImageError} />
+                          ) : (
+                            <div className="text-center p-4">
+                               <i className="fas fa-image text-2xl text-gray-300 mb-2 group-hover:scale-110 transition-transform"></i>
+                               <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Click to Upload</p>
+                            </div>
+                          )}
+                          <input type="file" className="hidden" accept="image/*" onChange={handleBannerFileSelect} />
+                          {bannerForm.imageUrl && (
+                            <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 flex items-center justify-center transition-opacity">
+                              <span className="text-white text-[9px] font-black uppercase tracking-widest">Replace Banner</span>
+                            </div>
+                          )}
+                        </label>
+                        
+                        <div className="bg-blue-50/50 p-4 rounded-xl border border-blue-100/50 space-y-1">
+                          <p className="text-[9px] font-black uppercase text-blue-600"><i className="fas fa-info-circle mr-1.5"></i> Banner Requirements</p>
+                          <ul className="text-[8px] font-bold text-blue-400/80 uppercase tracking-tighter list-disc pl-3">
+                            <li>Ideal Size: 1280px x 720px (16:9 Ratio)</li>
+                            <li>Max File Size: 2MB</li>
+                            <li>Supported Formats: JPG, PNG, WEBP</li>
+                          </ul>
+                        </div>
+                      </div>
                    </div>
+
                    <div className="space-y-1">
                       <label className="text-[10px] font-black uppercase text-gray-400">Target Website URL</label>
                       <input required type="url" className="w-full bg-gray-50 border p-4 rounded-xl font-bold" value={bannerForm.linkUrl} onChange={e => setBannerForm({...bannerForm, linkUrl: e.target.value})} placeholder="https://..." />
                    </div>
+
                    <div className="p-6 bg-blue-50 rounded-2xl border border-blue-100 flex justify-between items-center">
                       <div>
                         <p className="font-black text-blue-900">Sponsorship Fee</p>
@@ -348,32 +460,29 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       </div>
                       <p className="text-xl font-black text-blue-900">₹{config.bannerAdPrice}</p>
                    </div>
+
                    <button 
                     type="submit" 
-                    className={`w-full py-5 rounded-2xl font-black uppercase tracking-[0.2em] shadow-xl transition-all active:scale-95 ${user.walletBalance >= config.bannerAdPrice ? 'bg-blue-600 text-white shadow-blue-100' : 'bg-gray-100 text-gray-400 shadow-none'}`}
+                    disabled={!bannerForm.imageUrl}
+                    className={`w-full py-5 rounded-2xl font-black uppercase tracking-[0.2em] shadow-xl transition-all active:scale-95 disabled:opacity-50 ${user.walletBalance >= config.bannerAdPrice ? 'bg-blue-600 text-white shadow-blue-100' : 'bg-gray-100 text-gray-400 shadow-none'}`}
                    >
                      {user.walletBalance >= config.bannerAdPrice ? 'Purchase Sponsorship' : 'Save as Draft'}
                    </button>
-                   {user.walletBalance < config.bannerAdPrice && (
-                     <div className="text-center">
-                        <button type="button" onClick={() => setShowRechargeModal(true)} className="text-[10px] font-black uppercase text-blue-600 hover:underline">Insufficient Balance? Recharge Now</button>
-                     </div>
-                   )}
                 </form>
              </div>
              
              <div className="space-y-6">
                 <h3 className="text-xl font-black uppercase tracking-tighter">My City Banners</h3>
                 {userBanners.length === 0 ? (
-                  <div className="bg-gray-50 border border-dashed border-gray-200 aspect-[6/1] rounded-2xl flex items-center justify-center p-4">
+                  <div className="bg-gray-50 border border-dashed border-gray-200 aspect-video rounded-2xl flex items-center justify-center p-4">
                     <p className="text-[10px] font-black text-gray-300 uppercase tracking-widest">No sponsorships recorded</p>
                   </div>
                 ) : (
                   <div className="space-y-4">
                     {userBanners.map(banner => (
                       <div key={banner.id} className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-4 group">
-                        <div className="relative aspect-[6/1] rounded-xl overflow-hidden border border-gray-50">
-                           <img src={banner.imageUrl} className="w-full h-full object-cover" alt="Sponsor" />
+                        <div className="relative aspect-video rounded-xl overflow-hidden border border-gray-50 bg-gray-50">
+                           <img src={banner.imageUrl} className="w-full h-full object-cover" alt="Sponsor" onError={handleImageError} />
                            <div className={`absolute top-2 right-2 px-2 py-0.5 text-[7px] font-black uppercase rounded text-white ${
                              banner.status === 'LIVE' ? 'bg-emerald-500' : 
                              banner.status === 'DRAFT' ? 'bg-amber-500' : 'bg-rose-500'
@@ -403,9 +512,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
                 {bannerPreview && bannerForm.imageUrl && (
                   <div className="space-y-4 animate-in fade-in duration-300">
-                    <h3 className="text-xl font-black uppercase tracking-tighter">Live Preview</h3>
-                    <div className="bg-gray-100 aspect-[6/1] rounded-2xl overflow-hidden border border-blue-200 shadow-lg">
-                       <img src={bannerForm.imageUrl} className="w-full h-full object-cover" alt="Preview" />
+                    <div className="flex items-center justify-between">
+                       <h3 className="text-xl font-black uppercase tracking-tighter">Live Preview</h3>
+                       <span className="text-[8px] font-black uppercase text-blue-500 tracking-widest">1280 × 720 Responsive</span>
+                    </div>
+                    <div className="bg-gray-100 aspect-video rounded-2xl overflow-hidden border border-blue-200 shadow-lg">
+                       <img src={bannerForm.imageUrl} className="w-full h-full object-cover" alt="Preview" onError={handleImageError} />
                     </div>
                   </div>
                 )}
@@ -488,7 +600,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       ))}
                       {userTransactions.length === 0 && (
                          <tr>
-                            <td colSpan={3} className="py-20 text-center text-gray-300 font-black uppercase text-xs italic tracking-widest">No wallet activity recorded.</td>
+                            <td colSpan={3} className="py-20 text-center text-[10px] font-black uppercase text-gray-300 italic tracking-widest">No wallet activity recorded.</td>
                          </tr>
                       )}
                    </tbody>
@@ -534,7 +646,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                  <button onClick={() => setShowProfileModal(false)} className="text-gray-300"><i className="fas fa-times text-xl"></i></button>
               </div>
               <div className="p-10 space-y-8 overflow-y-auto max-h-[70vh] custom-scrollbar">
-                 {/* Photo Upload Section */}
                  <div className="flex flex-col items-center">
                     <div className="relative group mb-4">
                        <img src={profileForm.photo} className="w-24 h-24 rounded-3xl object-cover border-4 border-gray-50 shadow-lg" alt="" />
@@ -591,6 +702,63 @@ export const Dashboard: React.FC<DashboardProps> = ({
            </div>
         </div>
       )}
+
+      {/* Banner Crop Modal */}
+      {cropModal.show && (
+        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-gray-900/90 backdrop-blur-md animate-in fade-in">
+           <div className="bg-white w-full max-w-3xl rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95">
+              <div className="bg-slate-900 p-8 text-white flex justify-between items-center">
+                 <div>
+                    <h3 className="text-2xl font-black">Crop Your Banner</h3>
+                    <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest mt-1">Adjust position to fit 16:9 Aspect Ratio</p>
+                 </div>
+                 <button onClick={() => setCropModal({ show: false, image: null })} className="text-white/40 hover:text-white transition-colors">
+                    <i className="fas fa-times text-xl"></i>
+                 </button>
+              </div>
+              
+              <div className="p-10 space-y-8">
+                 <div className="relative aspect-video w-full bg-gray-100 rounded-2xl border-4 border-gray-50 shadow-inner overflow-hidden">
+                    <img 
+                      src={cropModal.image!} 
+                      className="absolute left-0 w-full transition-all duration-75"
+                      style={{ 
+                        top: `-${cropOffset}%`,
+                        height: 'auto'
+                      }} 
+                      alt="Crop Source" 
+                    />
+                    <div className="absolute inset-0 border-2 border-white/30 pointer-events-none"></div>
+                 </div>
+
+                 <div className="space-y-6">
+                    <div className="space-y-2">
+                       <div className="flex justify-between items-center">
+                          <label className="text-[10px] font-black uppercase text-gray-400">Vertical Adjustment</label>
+                          <span className="text-[10px] font-black text-blue-600">{cropOffset}%</span>
+                       </div>
+                       <input 
+                         type="range" 
+                         min="0" 
+                         max="100" 
+                         value={cropOffset} 
+                         onChange={(e) => setCropOffset(Number(e.target.value))}
+                         className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-blue-600"
+                       />
+                    </div>
+
+                    <div className="flex gap-4">
+                       <button onClick={applyCrop} className="flex-1 bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-[11px] tracking-widest shadow-xl shadow-blue-100">Finalize & Save</button>
+                       <button onClick={() => setCropModal({ show: false, image: null })} className="px-8 border border-gray-100 py-5 rounded-2xl font-black uppercase text-[11px] tracking-widest text-gray-400">Cancel</button>
+                    </div>
+                 </div>
+              </div>
+           </div>
+        </div>
+      )}
+
+      {/* Hidden Canvas for Cropping */}
+      <canvas ref={bannerCanvasRef} className="hidden" />
     </div>
   );
 };
