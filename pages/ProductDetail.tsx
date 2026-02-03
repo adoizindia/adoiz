@@ -55,7 +55,8 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
 
   return (
     <div className="max-w-7xl mx-auto p-0">
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-16">
+      {/* Product Content Grid - Reduced margin-bottom to 6 to minimize gap above banner */}
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-6">
         <div className="lg:col-span-2 space-y-8">
           <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-2xl shadow-blue-50 border border-gray-100 relative group">
             <img src={listing.images[0]} className="w-full aspect-[16/10] object-cover" alt={listing.title} />
@@ -201,9 +202,9 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
         </div>
       </div>
 
-      {/* City-Locked Banner Advertisement (Inserted exactly above 'More in this area') */}
+      {/* City-Locked Banner Advertisement */}
       {banners.length > 0 && (
-        <div className="rounded-[2rem] overflow-hidden border border-gray-100 shadow-sm bg-white p-2">
+        <div className="mb-6 rounded-[2rem] overflow-hidden border border-gray-100 shadow-sm bg-white p-2">
            <div className="relative aspect-video w-full">
               <a href={banners[0].linkUrl} target="_blank" rel="noopener noreferrer">
                  <img src={banners[0].imageUrl} className="w-full h-full object-cover rounded-2xl" alt="Advertisement" />
@@ -216,7 +217,7 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
       {/* Related Listings Section */}
       {relatedListings.length > 0 && (
         <div className="animate-in fade-in slide-in-from-bottom-8 duration-700">
-          <div className="flex justify-between items-end">
+          <div className="flex justify-between items-end mb-4">
             <div>
               <h2 className="text-3xl font-black text-gray-900 tracking-tight">Relevant in {getFormattedCity(listing.cityId)}</h2>
             </div>
