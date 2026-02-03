@@ -196,14 +196,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const img = new Image();
     img.src = cropModal.image;
     img.onload = () => {
-      // High-resolution 16:9 target: 1280x720
+      // Precise 16:9 target resolution: 1280x720
       const targetW = 1280;
       const targetH = 720;
       canvas.width = targetW;
       canvas.height = targetH;
 
       const imgAspect = img.width / img.height;
-      const targetAspect = 16 / 9;
+      const targetAspect = 16 / 9; // 16:9 Ratio
 
       let sx, sy, sw, sh;
 

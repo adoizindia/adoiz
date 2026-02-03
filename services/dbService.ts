@@ -1,4 +1,3 @@
-
 import { 
   User, Listing, Category, BannerAd, SupportTicket, 
   WalletTransaction, SystemConfig, City, State, Country,
@@ -42,7 +41,17 @@ class DbService {
   private states: State[] = [...STATES.map(s => ({ ...s, isActive: true }))];
   private cities: City[] = [...CITIES.map(c => ({ ...c, isActive: true }))];
 
-  private banners: BannerAd[] = [];
+  private banners: BannerAd[] = [
+    {
+      id: 'b-test-vikram-001',
+      userId: 'u5', // Vikram Singh's ID from ADDITIONAL_MOCK_USERS
+      cityId: 'c2', // Pune
+      imageUrl: 'https://images.unsplash.com/photo-1618221195710-dd6b41faaea6?auto=format&fit=crop&w=1280&q=80',
+      linkUrl: 'https://adoiz.com/pune-special-deals',
+      status: 'LIVE',
+      expiresAt: new Date(Date.now() + 86400000 * 30).toISOString() // Valid for 30 days
+    }
+  ];
   private transactions: WalletTransaction[] = [];
   private tickets: SupportTicket[] = [];
   private chats: Chat[] = [];
