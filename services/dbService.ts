@@ -443,6 +443,13 @@ class DbService {
   async getAllBanners(): Promise<BannerAd[]> { return [...this.banners]; }
   async getUserBanners(userId: string): Promise<BannerAd[]> { return this.banners.filter(b => b.userId === userId); }
 
+  async updateBanner(id: string, updates: Partial<BannerAd>): Promise<void> {
+    const idx = this.banners.findIndex(b => b.id === id);
+    if (idx === -1) throw new Error("Banner not found");
+    this.banners[idx] = { ...this.banners[idx], ...updates };
+    this.persist();
+  }
+
   async processBannerSponsorship(userId: string, cityId: string, imageUrl: string, linkUrl: string, title?: string): Promise<BannerAd> {
     // Check for existing active or pending banner
     const existing = this.banners.find(b => b.userId === userId && (b.status === 'LIVE' || b.status === 'PENDING'));

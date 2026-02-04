@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { dbService } from '../services/dbService';
-import { Listing, City, Category, BannerAd } from '../types';
+import { Listing, City, Category } from '../types';
 import { CITIES } from '../constants';
 
 interface ListingFeedProps {
@@ -26,7 +26,6 @@ export const ListingFeed: React.FC<ListingFeedProps> = ({
 }) => {
   const [listings, setListings] = useState<Listing[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
-  const [banners, setBanners] = useState<BannerAd[]>([]);
   const [loading, setLoading] = useState(true);
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<SortOption>('newest');
@@ -38,7 +37,6 @@ export const ListingFeed: React.FC<ListingFeedProps> = ({
       setLoading(false);
     });
     dbService.getCategories().then(setCategories);
-    dbService.getActiveBanners(city.id).then(setBanners);
   }, [city.id, searchQuery, category]);
 
   const sortedListings = useMemo(() => {
@@ -63,18 +61,6 @@ export const ListingFeed: React.FC<ListingFeedProps> = ({
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 pb-24">
-      {/* City-Locked Banner Advertisement */}
-      {banners.length > 0 && (
-        <div className="mb-8 rounded-[2rem] overflow-hidden border border-gray-100 shadow-sm bg-white p-2">
-           <div className="relative aspect-video w-full">
-              <a href={banners[0].linkUrl} target="_blank" rel="noopener noreferrer">
-                 <img src={banners[0].imageUrl} className="w-full h-full object-cover rounded-2xl" alt="Advertisement" />
-                 <div className="absolute top-2 right-2 bg-black/20 backdrop-blur-md text-white text-[7px] font-black uppercase px-2 py-0.5 rounded">Ad Placement</div>
-              </a>
-           </div>
-        </div>
-      )}
-
       <div className="flex flex-col gap-6 mb-8 bg-white p-5 md:p-8 rounded-[2.5rem] border border-gray-100 shadow-sm animate-in slide-in-from-top-4">
         <div className="flex flex-row items-center justify-between gap-2 md:gap-4 w-full">
           <div className="flex items-center space-x-1 md:space-x-2 bg-gray-50 p-1 md:p-1.5 rounded-xl md:rounded-2xl border border-gray-100 flex-shrink-0">
