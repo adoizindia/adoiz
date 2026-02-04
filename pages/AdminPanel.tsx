@@ -360,6 +360,23 @@ export const AdminPanel: React.FC<{
     }
   };
 
+  const handleBannerStatusUpdate = async (id: string, status: BannerAd['status']) => {
+    let reason = '';
+    if (status === 'REJECTED') {
+      reason = window.prompt("Reason for rejection?") || 'Policy violation';
+    }
+    setIsProcessing(true);
+    try {
+      await dbService.adminUpdateBannerStatus(id, status, reason, user.id);
+      notify(`Banner ${status.toLowerCase()} successfully.`, "success");
+      loadData();
+    } catch (err: any) {
+      notify(err.message, "error");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   function getTabsForMenu(menu: MainMenu) {
     switch(menu) {
       case 'DASHBOARD': return [
@@ -385,7 +402,8 @@ export const AdminPanel: React.FC<{
       ];
       case 'LISTINGS': return [
         { id: 'master', label: 'Master Inventory' },
-        { id: 'pending', label: 'Pending Review' }
+        { id: 'pending', label: 'Pending Review' },
+        { id: 'banner_inventory', label: 'Banner Ad' }
       ];
       case 'BANNERS': return [
         { id: 'active', label: 'Active Banners' },
@@ -1378,6 +1396,95 @@ export const AdminPanel: React.FC<{
           </div>
         );
       case 'LISTINGS':
+        if (activeTab === 'banner_inventory') {
+          const filteredBanners = banners.filter(b => {
+             const isModForCity = user.role === UserRole.ADMIN || (user.managedCityIds?.includes(b.cityId));
+             const matchesSearch = b.title?.toLowerCase().includes(searchQuery.toLowerCase()) || 
+                                 b.id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                 b.userId.toLowerCase().includes(searchQuery.toLowerCase());
+             return isModForCity && matchesSearch;
+          });
+
+          return (
+            <div className="space-y-6 animate-in fade-in">
+              <div className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm flex flex-col md:flex-row items-center gap-6">
+                 <div className="relative flex-1">
+                    <i className="fas fa-search absolute left-5 top-1/2 -translate-y-1/2 text-gray-300 text-xs"></i>
+                    <input type="text" placeholder="Search Banners, Sponsors, or SKU..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-12 pr-6 py-4 text-xs font-bold outline-none focus:bg-white focus:ring-4 focus:ring-blue-500/5 transition-all" />
+                 </div>
+              </div>
+
+              <div className="bg-white rounded-[3rem] border border-gray-100 overflow-hidden shadow-sm">
+                 <div className="overflow-x-auto">
+                    <table className="w-full text-left">
+                       <thead>
+                          <tr className="text-[10px] font-black uppercase text-gray-400 border-b border-gray-50">
+                             <th className="px-10 py-6">Visual / Campaign</th>
+                             <th className="px-10 py-6">Sponsor Identity</th>
+                             <th className="px-10 py-6">Operational Node</th>
+                             <th className="px-10 py-6">Sponsorship Period</th>
+                             <th className="px-10 py-6">Status</th>
+                             <th className="px-10 py-6 text-right">Operations</th>
+                          </tr>
+                       </thead>
+                       <tbody className="divide-y divide-gray-50">
+                          {filteredBanners.map(b => (
+                             <tr key={b.id} className="hover:bg-gray-50/50 transition-colors group">
+                                <td className="px-10 py-6">
+                                   <div className="flex items-center gap-4">
+                                      <img src={b.imageUrl} className="w-16 aspect-video rounded-lg object-cover shadow-sm" />
+                                      <div className="min-w-0">
+                                         <p className="text-xs font-black text-gray-900 truncate max-w-[150px] uppercase">{b.title || 'Untitled Campaign'}</p>
+                                         <span className="text-[8px] font-bold text-gray-400 tracking-tighter">ID: {b.id}</span>
+                                      </div>
+                                   </div>
+                                </td>
+                                <td className="px-10 py-6">
+                                   <p className="text-[10px] font-black text-gray-900">{users.find(u => u.id === b.userId)?.name || 'Unknown Sponsor'}</p>
+                                   <p className="text-[9px] text-gray-400 font-bold tracking-tighter">UID: {b.userId}</p>
+                                </td>
+                                <td className="px-10 py-6">
+                                   <p className="text-[10px] font-black text-gray-900">{CITIES.find(c => c.id === b.cityId)?.name || 'UNSET'}</p>
+                                   <span className="text-[8px] font-black text-blue-500 uppercase">Tier {(config.cityTierMapping[b.cityId] || 'T2')}</span>
+                                </td>
+                                <td className="px-10 py-6">
+                                   <p className="text-[10px] font-black text-emerald-600">Start: {b.createdAt ? new Date(b.createdAt).toLocaleDateString() : 'N/A'}</p>
+                                   <p className="text-[10px] font-black text-rose-600">Expiry: {new Date(b.expiresAt).toLocaleDateString()}</p>
+                                </td>
+                                <td className="px-10 py-6">
+                                   <span className={`px-3 py-1 rounded-full text-[8px] font-black uppercase tracking-widest ${
+                                      b.status === 'LIVE' ? 'bg-emerald-50 text-emerald-600 border border-emerald-100' :
+                                      b.status === 'PENDING' ? 'bg-blue-50 text-blue-600 border border-blue-100' :
+                                      b.status === 'REJECTED' ? 'bg-rose-50 text-rose-600 border border-rose-100' :
+                                      'bg-gray-100 text-gray-400 border border-gray-200'
+                                   }`}>
+                                      {b.status}
+                                   </span>
+                                </td>
+                                <td className="px-10 py-6 text-right">
+                                   <div className="flex justify-end gap-2">
+                                      {b.status === 'PENDING' && (
+                                         <>
+                                            <button onClick={() => handleBannerStatusUpdate(b.id, 'LIVE')} className="w-10 h-10 bg-emerald-50 text-emerald-600 hover:bg-emerald-100 rounded-xl transition-all shadow-sm flex items-center justify-center" title="Approve Sponsorship"><i className="fas fa-check text-xs"></i></button>
+                                            <button onClick={() => handleBannerStatusUpdate(b.id, 'REJECTED')} className="w-10 h-10 bg-rose-50 text-rose-600 hover:bg-rose-100 rounded-xl transition-all shadow-sm flex items-center justify-center" title="Reject Sponsorship"><i className="fas fa-times text-xs"></i></button>
+                                         </>
+                                      )}
+                                      <button onClick={() => { if(window.confirm("Permanently remove this sponsorship creative?")) { dbService.adminUpdateBannerStatus(b.id, 'EXPIRED'); loadData(); } }} className="w-10 h-10 bg-gray-50 text-gray-400 hover:text-rose-600 hover:bg-white rounded-xl transition-all border border-transparent border-rose-100 shadow-sm flex items-center justify-center"><i className="fas fa-trash-alt text-xs"></i></button>
+                                   </div>
+                                </td>
+                             </tr>
+                          ))}
+                          {filteredBanners.length === 0 && (
+                             <tr><td colSpan={6} className="py-24 text-center text-[10px] font-black uppercase text-gray-300 italic tracking-widest">No sponsorships indexed for moderation.</td></tr>
+                          )}
+                       </tbody>
+                    </table>
+                 </div>
+              </div>
+            </div>
+          );
+        }
+
         const filteredListings = listings.filter(l => {
           const matchesSearch = l.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                               l.id.toLowerCase().includes(searchQuery.toLowerCase()) ||

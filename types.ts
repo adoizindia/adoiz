@@ -50,10 +50,12 @@ export interface BannerAd {
   title?: string;
   imageUrl: string;
   linkUrl: string;
-  status: 'DRAFT' | 'LIVE' | 'EXPIRED';
+  status: 'DRAFT' | 'PENDING' | 'LIVE' | 'REJECTED' | 'EXPIRED';
   expiresAt: string;
+  createdAt?: string;
   views?: number;
   clicks?: number;
+  rejectionReason?: string;
 }
 
 export interface BackupArchive {

@@ -444,16 +444,32 @@ class DbService {
   async getUserBanners(userId: string): Promise<BannerAd[]> { return this.banners.filter(b => b.userId === userId); }
 
   async processBannerSponsorship(userId: string, cityId: string, imageUrl: string, linkUrl: string, title?: string): Promise<BannerAd> {
+    // Check for existing active or pending banner
+    const existing = this.banners.find(b => b.userId === userId && (b.status === 'LIVE' || b.status === 'PENDING'));
+    if (existing) throw new Error("A user can only have one active or pending banner sponsorship at a time.");
+
     const price = this.getBannerPrice(cityId);
     const newBanner: BannerAd = {
       id: 'b' + Date.now(), userId, cityId, title, imageUrl, linkUrl,
-      status: 'LIVE', expiresAt: new Date(Date.now() + 86400000 * this.config.bannerAdDurationDays).toISOString(),
+      status: 'PENDING', // Start as PENDING for moderation
+      expiresAt: new Date(Date.now() + 86400000 * this.config.bannerAdDurationDays).toISOString(),
+      createdAt: new Date().toISOString(),
       views: 0, clicks: 0
     };
     await this.adminAdjustWallet(userId, price, 'DEBIT', `Purchased City Sponsorship: ${cityId}`, 'SYSTEM');
     this.banners.unshift(newBanner);
     this.persist();
     return newBanner;
+  }
+
+  async adminUpdateBannerStatus(id: string, status: BannerAd['status'], reason?: string, adminId?: string): Promise<void> {
+    const idx = this.banners.findIndex(b => b.id === id);
+    if (idx !== -1) {
+      this.banners[idx].status = status;
+      this.banners[idx].rejectionReason = reason;
+      if (adminId) this.addSecurityLog('BANNER_MOD', `Banner ${id} Status -> ${status}`, 'LOW', adminId);
+      this.persist();
+    }
   }
 
   async activateExistingBanner(id: string, userId: string): Promise<void> {

@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Listing, User, BannerAd } from '../types';
 import { dbService } from '../services/dbService';
@@ -22,6 +23,7 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
   const [isConnecting, setIsConnecting] = useState(false);
   const [relatedListings, setRelatedListings] = useState<Listing[]>([]);
   const [banners, setBanners] = useState<BannerAd[]>([]);
+  const [activeImageIndex, setActiveImageIndex] = useState(0);
 
   useEffect(() => {
     // Fetch other listings in the same city
@@ -36,6 +38,7 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
 
     // Scroll to top when listing changes
     window.scrollTo({ top: 0, behavior: 'smooth' });
+    setActiveImageIndex(0);
   }, [listing.id, listing.cityId]);
 
   const handleReveal = () => {
@@ -53,16 +56,73 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
     return city ? `${city.name} - ${cityId}` : cityId;
   };
 
+  const nextImage = () => {
+    setActiveImageIndex((prev) => (prev + 1) % listing.images.length);
+  };
+
+  const prevImage = () => {
+    setActiveImageIndex((prev) => (prev - 1 + listing.images.length) % listing.images.length);
+  };
+
   return (
     <div className="max-w-7xl mx-auto p-0">
-      {/* Product Content Grid - Reduced margin-bottom to 6 to minimize gap above banner */}
+      {/* Product Content Grid */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-6">
-        <div className="lg:col-span-2 space-y-8">
-          <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-2xl shadow-blue-50 border border-gray-100 relative group">
-            <img src={listing.images[0]} className="w-full aspect-[16/10] object-cover" alt={listing.title} />
-            {listing.isPremium && (
-              <div className="absolute top-6 left-6 bg-yellow-400 text-yellow-900 text-[10px] font-black uppercase px-3 py-1.5 rounded-xl shadow-2xl border border-yellow-500/20">
-                <i className="fas fa-crown mr-1.5"></i> Premium Ad
+        <div className="lg:col-span-2 space-y-6">
+          {/* Image Gallery Section */}
+          <div className="space-y-4">
+            <div className="bg-white rounded-[2.5rem] overflow-hidden shadow-2xl shadow-blue-50 border border-gray-100 relative group aspect-[16/10]">
+              <img 
+                src={listing.images[activeImageIndex]} 
+                className="w-full h-full object-cover transition-all duration-500" 
+                alt={`${listing.title} - View ${activeImageIndex + 1}`} 
+              />
+              
+              {/* Premium Badge */}
+              {listing.isPremium && (
+                <div className="absolute top-6 left-6 bg-yellow-400 text-yellow-900 text-[10px] font-black uppercase px-3 py-1.5 rounded-xl shadow-2xl border border-yellow-500/20 z-10">
+                  <i className="fas fa-crown mr-1.5"></i> Premium Ad
+                </div>
+              )}
+
+              {/* Navigation Arrows */}
+              {listing.images.length > 1 && (
+                <>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); prevImage(); }}
+                    className="absolute left-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/20 hover:bg-white/40 backdrop-blur-md rounded-full text-white flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"
+                  >
+                    <i className="fas fa-chevron-left"></i>
+                  </button>
+                  <button 
+                    onClick={(e) => { e.stopPropagation(); nextImage(); }}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 w-12 h-12 bg-white/20 hover:bg-white/40 backdrop-blur-md rounded-full text-white flex items-center justify-center transition-all opacity-0 group-hover:opacity-100"
+                  >
+                    <i className="fas fa-chevron-right"></i>
+                  </button>
+                  
+                  {/* Image Counter */}
+                  <div className="absolute bottom-6 right-6 bg-black/50 backdrop-blur-md text-white text-[10px] font-black px-3 py-1.5 rounded-xl border border-white/10">
+                    {activeImageIndex + 1} / {listing.images.length}
+                  </div>
+                </>
+              )}
+            </div>
+
+            {/* Thumbnail Row */}
+            {listing.images.length > 1 && (
+              <div className="flex gap-3 overflow-x-auto hide-scrollbar pb-2">
+                {listing.images.map((img, idx) => (
+                  <button
+                    key={idx}
+                    onClick={() => setActiveImageIndex(idx)}
+                    className={`relative w-24 h-16 flex-shrink-0 rounded-xl overflow-hidden border-2 transition-all ${
+                      activeImageIndex === idx ? 'border-blue-600 ring-2 ring-blue-100' : 'border-transparent opacity-70 hover:opacity-100'
+                    }`}
+                  >
+                    <img src={img} className="w-full h-full object-cover" alt={`Thumbnail ${idx + 1}`} />
+                  </button>
+                ))}
               </div>
             )}
           </div>
