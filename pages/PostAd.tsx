@@ -1,3 +1,4 @@
+
 import React, { useState, useRef, useEffect } from 'react';
 import { City, User, Listing, UserRole, Category, ListingStatus } from '../types';
 import { dbService } from '../services/dbService';
@@ -26,6 +27,7 @@ export const PostAd: React.FC<PostAdProps> = ({ user, city, editListing, onSucce
     title: '',
     price: '',
     category: '',
+    productType: 'Universal' as 'New' | 'Used' | 'Universal',
     description: '',
     isPremium: false,
     images: [] as string[]
@@ -46,6 +48,7 @@ export const PostAd: React.FC<PostAdProps> = ({ user, city, editListing, onSucce
         title: editListing.title,
         price: editListing.price.toString(),
         category: editListing.category,
+        productType: editListing.productType || 'Universal',
         description: editListing.description,
         isPremium: editListing.isPremium,
         images: editListing.images
@@ -126,6 +129,7 @@ export const PostAd: React.FC<PostAdProps> = ({ user, city, editListing, onSucce
           description: formData.description,
           price: Number(formData.price), 
           category: formData.category,
+          productType: formData.productType,
           isPremium: formData.isPremium, 
           images: formData.images,
           status: ListingStatus.EDIT_PENDING,
@@ -136,6 +140,7 @@ export const PostAd: React.FC<PostAdProps> = ({ user, city, editListing, onSucce
           sellerId: user.id, cityId: city.id,
           title: formData.title, description: formData.description,
           price: Number(formData.price), category: formData.category,
+          productType: formData.productType,
           isPremium: formData.isPremium, images: formData.images
         });
       }
@@ -183,6 +188,18 @@ export const PostAd: React.FC<PostAdProps> = ({ user, city, editListing, onSucce
             <div className="md:col-span-2"><label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Product Title</label><input required type="text" className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-6 py-4 outline-none font-medium" value={formData.title} onChange={e => setFormData({...formData, title: e.target.value})} /></div>
             <div><label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Price (₹)</label><input required type="number" className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-6 py-4 outline-none font-medium" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} /></div>
             <div><label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Category</label><select className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-6 py-4 outline-none font-medium" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>{categories.map(cat => <option key={cat.id} value={cat.name}>{cat.name}</option>)}</select></div>
+            <div>
+              <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Product Type</label>
+              <select 
+                className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-6 py-4 outline-none font-medium" 
+                value={formData.productType} 
+                onChange={e => setFormData({...formData, productType: e.target.value as 'New' | 'Used' | 'Universal'})}
+              >
+                <option value="New">New</option>
+                <option value="Used">Used</option>
+                <option value="Universal">Universal</option>
+              </select>
+            </div>
           </div>
 
           <div><label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Description</label><textarea required rows={5} className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-6 py-4 outline-none font-medium" value={formData.description} onChange={e => setFormData({...formData, description: e.target.value})} /></div>

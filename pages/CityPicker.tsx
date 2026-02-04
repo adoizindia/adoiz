@@ -16,21 +16,33 @@ export const CityPicker: React.FC<CityPickerProps> = ({ onSelect }) => {
   const [selectedStateId, setSelectedStateId] = useState('');
   
   useEffect(() => {
-    setCountries(dbService.getCountries());
+    const loadCountries = async () => {
+      const data = await dbService.getCountries();
+      setCountries(data);
+    };
+    loadCountries();
   }, []);
 
   useEffect(() => {
-    if (selectedCountryId) {
-      setStates(dbService.getStates(selectedCountryId));
-      setSelectedStateId('');
-      setCities([]);
-    }
+    const loadStates = async () => {
+      if (selectedCountryId) {
+        const data = await dbService.getStates(selectedCountryId);
+        setStates(data);
+        setSelectedStateId('');
+        setCities([]);
+      }
+    };
+    loadStates();
   }, [selectedCountryId]);
 
   useEffect(() => {
-    if (selectedStateId) {
-      setCities(dbService.getCities(selectedStateId));
-    }
+    const loadCities = async () => {
+      if (selectedStateId) {
+        const data = await dbService.getCities(selectedStateId);
+        setCities(data);
+      }
+    };
+    loadCities();
   }, [selectedStateId]);
 
   return (

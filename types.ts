@@ -1,3 +1,4 @@
+
 export enum UserRole {
   GUEST = 'GUEST',
   USER = 'USER',
@@ -9,7 +10,8 @@ export enum ListingStatus {
   PENDING = 'PENDING',
   APPROVED = 'APPROVED',
   REJECTED = 'REJECTED',
-  EDIT_PENDING = 'EDIT_PENDING'
+  EDIT_PENDING = 'EDIT_PENDING',
+  DISABLED = 'DISABLED'
 }
 
 export interface SecurityLog {
@@ -26,6 +28,9 @@ export interface Category {
   id: string;
   name: string;
   icon: string;
+  parentId?: string;
+  isActive?: boolean;
+  createdAt?: string;
 }
 
 export interface SupportTicket {
@@ -42,10 +47,13 @@ export interface BannerAd {
   id: string;
   userId: string;
   cityId: string;
+  title?: string;
   imageUrl: string;
   linkUrl: string;
   status: 'DRAFT' | 'LIVE' | 'EXPIRED';
   expiresAt: string;
+  views?: number;
+  clicks?: number;
 }
 
 export interface BackupArchive {
@@ -73,16 +81,29 @@ export interface SystemConfig {
   blueTickEnabled: boolean;
   bannerAdPrice: number;
   bannerAdDurationDays: number;
+  bannerAdTierPrices: {
+    T1: number;
+    T2: number;
+    T3: number;
+  };
+  googleAdsenseCode: string;
+  cityTierMapping: Record<string, 'T1' | 'T2' | 'T3'>;
+  cityFeatureOverrides?: Record<string, {
+    ads?: boolean;
+    banners?: boolean;
+    premiumAds?: boolean;
+    freeAds?: boolean;
+  }>;
+  featureToggles: {
+    ads: boolean;
+    banners: boolean;
+    wallet: boolean;
+    verification: boolean;
+    guestBrowsing: boolean;
+    cityLock: boolean;
+  };
   adminUrl: string;
   adminUsername: string;
-  adminPassword?: string;
-  backupSchedule: {
-    enabled: boolean;
-    frequency: 'DAILY' | 'REALTIME';
-    lastRunAt?: string;
-    nextRunAt?: string;
-    retentionLimit: number;
-  };
   adminAuth: {
     twoFactorEnabled: boolean;
     sessionTimeoutMinutes: number;
@@ -90,8 +111,6 @@ export interface SystemConfig {
     restrictAdminIp: boolean;
     allowedAdminIps: string[];
     passwordExpiryDays: number;
-    loginLockoutMinutes?: number;
-    enableLoginLimits?: boolean;
   };
   branding: {
     siteTagline: string;
@@ -109,31 +128,30 @@ export interface SystemConfig {
       youtube: string;
     }
   };
+  socialLogin: {
+    googleClientId: string;
+    facebookAppId: string;
+  };
   paymentGateway: {
     razorpay: { active: boolean; keyId: string; keySecret: string; };
     paypal: { active: boolean; clientId: string; secret: string; };
     stripe: { active: boolean; publishableKey: string; secretKey: string; };
-    paytm: { active: boolean; merchantId: boolean; merchantKey: string; website: string; };
+    paytm: { active: boolean; merchantId: string; merchantKey: string; website: string; };
     phonepe: { active: boolean; merchantId: string; saltKey: string; saltIndex: string; };
     upiId: string;
   };
   smsGateway: {
-    twilio: { active: boolean; sid: string; authToken: boolean; fromNumber: string; };
+    selected: 'twilio' | 'msg91' | 'textlocal';
+    twilio: { active: boolean; sid: string; authToken: string; fromNumber: string; };
     msg91: { active: boolean; authKey: string; senderId: string; };
     textlocal: { active: boolean; apiKey: string; sender: string; };
   };
   emailGateway: {
+    selected: 'sendgrid' | 'mailgun' | 'ses';
     sendgrid: { active: boolean; apiKey: string; fromEmail: string; };
+    // Fix: renamed 'gun' to 'mailgun' to match its literal value in 'selected' and the implementation in dbService.ts
     mailgun: { active: boolean; apiKey: string; domain: string; fromEmail: string; };
     ses: { active: boolean; accessKey: string; secretKey: string; region: string; fromEmail: string; };
-  };
-  socialLogin: { 
-    googleClientId: string; 
-    googleClientSecret: string;
-    googleEnabled: boolean;
-    facebookAppId: string; 
-    facebookAppSecret: string;
-    facebookEnabled: boolean;
   };
   analytics: {
     googleAnalyticsId: string;
@@ -144,20 +162,13 @@ export interface SystemConfig {
     metaTitle: string;
     metaDescription: string;
   };
-  advertising: { googleAdSenseClient: string; };
-  security: { 
-    ipBlacklist: string[]; 
-    maxFailedLogins: number; 
-    requireMobileVerification: boolean;
-    requireEmailVerification: boolean;
-    requireOtpLogin: boolean;
-    auditLogRetentionDays?: number;
-  };
 }
 
-export interface Country { id: string; name: string; code: string; isActive?: boolean; }
+export interface Country { id: string; name: string; code: string; isActive?: boolean; createdAt?: string; }
 export interface State { id: string; name: string; countryId: string; isActive?: boolean; }
 export interface City { id: string; name: string; stateId: string; isActive?: boolean; }
+
+export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'BANNED';
 
 export interface User {
   id: string;
@@ -173,9 +184,10 @@ export interface User {
   walletBalance: number;
   managedCityIds?: string[];
   isSuspended?: boolean;
+  isBanned?: boolean;
   isVerified?: boolean;
   blueTickUntil?: string;
-  socialProvider?: 'google' | 'facebook' | 'email';
+  socialProvider?: 'email' | 'google' | 'facebook';
 }
 
 export interface Listing {
@@ -186,6 +198,7 @@ export interface Listing {
   description: string;
   price: number;
   category: string;
+  productType?: 'New' | 'Used' | 'Universal';
   images: string[];
   status: ListingStatus;
   isPremium: boolean;

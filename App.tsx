@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { User, City, Listing, UserRole, Chat } from './types';
 import { BottomNav } from './components/layout/BottomNav';
@@ -19,6 +20,8 @@ import { dbService } from './services/dbService';
 
 type ViewState = 'HOME' | 'DETAIL' | 'DASHBOARD' | 'POST_AD' | 'EDIT_AD' | 'LISTINGS' | 'MESSAGES' | 'CHAT_ROOM' | 'MODERATION' | 'ADMIN_PANEL' | 'AUTH';
 
+interface Toast { id: number; message: string; type: 'success' | 'error' | 'info'; }
+
 const App: React.FC = () => {
   const [user, setUser] = useState<User | null>(null); 
   const [currentCity, setCurrentCity] = useState<City | null>(null);
@@ -31,31 +34,31 @@ const App: React.FC = () => {
   const [isMaintenance, setIsMaintenance] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
+  const [toasts, setToasts] = useState<Toast[]>([]);
+
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), 3000);
+  }, []);
 
   const config = useMemo(() => dbService.getSystemConfig(), [view]);
 
-  const handleGoogleCredentialResponse = useCallback(async (response: any) => {
-    const token = response.credential;
-    try {
-      const base64Url = token.split('.')[1];
-      const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-      const payload = JSON.parse(window.atob(base64));
-      if (payload) {
-        await handleSocialAuth(payload.email, payload.name, payload.picture, 'google');
-      }
-    } catch (e) {
-      console.error("JWT Decode Error", e);
-    }
-  }, []);
+  useEffect(() => {
+    const handler = (e: any) => showToast(e.detail.message, e.detail.type);
+    window.addEventListener('adoiz-notify', handler);
+    return () => window.removeEventListener('adoiz-notify', handler);
+  }, [showToast]);
 
   const handleSocialAuth = async (email: string, name: string, photo: string, provider: 'google' | 'facebook') => {
     const allUsers = await dbService.getAllUsers();
     let found = allUsers.find(u => u.email === email);
     if (!found) {
       found = await dbService.registerUser({ email, name, role: UserRole.USER, socialProvider: provider, photo: photo });
+      showToast("Account created successfully!", "success");
     }
     if (found.isSuspended) {
-      alert("Account suspended.");
+      showToast("Account suspended.", "error");
       return;
     }
     handleLoginSuccess(found);
@@ -67,35 +70,28 @@ const App: React.FC = () => {
     if (g) {
       g.accounts.id.initialize({
         client_id: currentConfig.socialLogin.googleClientId || 'YOUR_GOOGLE_ID',
-        callback: handleGoogleCredentialResponse,
+        callback: (res: any) => {
+            const base64Url = res.credential.split('.')[1];
+            const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+            const payload = JSON.parse(window.atob(base64));
+            handleSocialAuth(payload.email, payload.name, payload.picture, 'google');
+        },
       });
     }
-    const fb = (window as any).FB;
-    if (fb) {
-      fb.init({ 
-        appId: currentConfig.socialLogin.facebookAppId || 'YOUR_FB_ID', 
-        cookie: true, 
-        xfbml: true, 
-        version: 'v18.0' 
-      });
-    }
-  }, [handleGoogleCredentialResponse, config.socialLogin.googleClientId, config.socialLogin.facebookAppId]);
+  }, [config.socialLogin.googleClientId]);
 
   useEffect(() => {
     const currentConfig = dbService.getSystemConfig();
     setIsMaintenance(currentConfig.maintenanceMode && user?.role !== UserRole.ADMIN);
   }, [user, config.maintenanceMode]);
 
-  // Handle City Initialization for Guests and Logged-in Users
   useEffect(() => {
     if (user) {
-      // B. Logged-in users use profile city
       if (user.cityId) {
         const city = CITIES.find(c => c.id === user.cityId);
         if (city) setCurrentCity(city);
       }
     } else {
-      // A. Guest users reload from browser storage
       const storedCityId = localStorage.getItem('adoiz_guest_city_id');
       if (storedCityId) {
         const city = CITIES.find(c => c.id === storedCityId);
@@ -117,10 +113,8 @@ const App: React.FC = () => {
 
   const handleCitySelect = (city: City) => {
     setCurrentCity(city);
-    // A2 & C: Persist in storage only for guest users
-    if (!user) {
-      localStorage.setItem('adoiz_guest_city_id', city.id);
-    }
+    if (!user) localStorage.setItem('adoiz_guest_city_id', city.id);
+    showToast(`City changed to ${city.name}`, "info");
     if (['DETAIL', 'POST_AD', 'EDIT_AD'].includes(view)) setView('HOME');
   };
 
@@ -134,26 +128,25 @@ const App: React.FC = () => {
 
   const handleContactSeller = async (listing: Listing, seller: User) => {
     if (!user) { setView('AUTH'); return; }
-    if (user.id === seller.id) { alert("Your ad!"); return; }
+    if (user.id === seller.id) { showToast("You cannot chat with yourself.", "info"); return; }
     const chat = await dbService.getOrCreateChat(user.id, seller.id, listing, seller.name);
     setSelectedChat(chat);
     setView('CHAT_ROOM');
   };
 
-  const handleSearchIntent = (query: string) => {
-    setSearchQuery(query);
-    setActiveCategory('All');
-    setView('LISTINGS');
-  };
-
   const handleLoginSuccess = (u: User) => {
     setUser(u);
+    showToast(`Welcome back, ${u.name}!`, "success");
     if (u.role === UserRole.ADMIN) setView('ADMIN_PANEL');
     else if (u.role === UserRole.MODERATOR) setView('MODERATION');
     else setView('HOME');
   };
 
-  const handleLogout = () => { setUser(null); setView('HOME'); };
+  const handleLogout = () => { 
+    setUser(null); 
+    setView('HOME'); 
+    showToast("Logged out successfully.", "info");
+  };
 
   const handleNavigationChange = (tab: string) => {
     if (tab === 'home') setView('HOME');
@@ -182,17 +175,16 @@ const App: React.FC = () => {
       </div>
     );
 
-    // City selection logic: currentCity check triggers CityPicker
     if (!currentCity && view !== 'AUTH') return <CityPicker onSelect={handleCitySelect} />;
 
     switch (view) {
       case 'AUTH': return <Auth onLogin={handleLoginSuccess} onGoogleLogin={() => (window as any).google?.accounts.id.prompt()} onFacebookLogin={() => (window as any).FB?.login()} />;
-      case 'HOME': return <Home city={currentCity!} onSearch={handleSearchIntent} onCategorySelect={c => { setActiveCategory(c); setSearchQuery(''); setView('LISTINGS'); }} onListingClick={handleListingClick} onSelectCity={() => setCurrentCity(null)} />;
+      case 'HOME': return <Home city={currentCity!} onSearch={q => { setSearchQuery(q); setView('LISTINGS'); }} onCategorySelect={c => { setActiveCategory(c); setSearchQuery(''); setView('LISTINGS'); }} onListingClick={handleListingClick} onSelectCity={() => setCurrentCity(null)} />;
       case 'LISTINGS': return <ListingFeed city={currentCity!} onListingClick={handleListingClick} onSelectCity={() => setCurrentCity(null)} searchQuery={searchQuery} category={activeCategory} onSearchChange={setSearchQuery} onCategoryChange={setActiveCategory} />;
       case 'DETAIL': return selectedListing && selectedSeller ? <ProductDetail listing={selectedListing} seller={selectedSeller} onBack={() => setView('LISTINGS')} onContactSeller={handleContactSeller} onListingClick={handleListingClick} /> : null;
-      case 'DASHBOARD': return user ? <Dashboard user={user} listings={userListings} onEdit={l => { setListingToEdit(l); setView('EDIT_AD'); }} onDelete={async id => { if (window.confirm("Delete this listing permanently?")) { await dbService.deleteListing(id); loadUserListings(); } }} onBoost={async id => { await dbService.upgradeListingToPremium(id, user.id); loadUserListings(); }} onPostNew={() => setView('POST_AD')} onAddFunds={async a => { const u = await dbService.rechargeWallet(user.id, a); if (u) setUser(u); }} onUpdateUser={u => setUser(u)} onLogout={handleLogout} onAdminPanel={() => setView('ADMIN_PANEL')} onModerationPanel={() => setView('MODERATION')} /> : null;
-      case 'POST_AD': return user ? <PostAd user={user} city={currentCity!} onUpdateUser={u => setUser(u)} onSuccess={() => setView('DASHBOARD')} onCancel={() => setView('DASHBOARD')} /> : null;
-      case 'EDIT_AD': return user && listingToEdit ? <PostAd user={user} city={currentCity!} onUpdateUser={u => setUser(u)} editListing={listingToEdit} onSuccess={() => setView('DASHBOARD')} onCancel={() => setView('DASHBOARD')} /> : null;
+      case 'DASHBOARD': return user ? <Dashboard user={user} listings={userListings} onEdit={l => { setListingToEdit(l); setView('EDIT_AD'); }} onDelete={async id => { if (window.confirm("Delete this listing permanently?")) { await dbService.deleteListing(id); loadUserListings(); showToast("Listing deleted successfully.", "error"); } }} onBoost={async id => { await dbService.upgradeListingToPremium(id, user.id); loadUserListings(); showToast("Upgraded to Premium!", "success"); }} onPostNew={() => setView('POST_AD')} onAddFunds={async a => { const u = await dbService.rechargeWallet(user.id, a); if (u) { setUser(u); showToast(`Wallet recharged with ₹${a}`, "success"); } }} onUpdateUser={u => setUser(u)} onLogout={handleLogout} onAdminPanel={() => setView('ADMIN_PANEL')} onModerationPanel={() => setView('MODERATION')} /> : null;
+      case 'POST_AD': return user ? <PostAd user={user} city={currentCity!} onUpdateUser={u => setUser(u)} onSuccess={() => { setView('DASHBOARD'); showToast("Ad posted successfully!", "success"); }} onCancel={() => setView('DASHBOARD')} /> : null;
+      case 'EDIT_AD': return user && listingToEdit ? <PostAd user={user} city={currentCity!} onUpdateUser={u => setUser(u)} editListing={listingToEdit} onSuccess={() => { setView('DASHBOARD'); showToast("Ad updated successfully!", "success"); }} onCancel={() => setView('DASHBOARD')} /> : null;
       case 'MESSAGES': return user ? <Inbox user={user} onSelectChat={c => { setSelectedChat(c); setView('CHAT_ROOM'); }} /> : null;
       case 'CHAT_ROOM': return user && selectedChat ? <ChatRoom user={user} chat={selectedChat} onBack={() => setView('MESSAGES')} /> : null;
       case 'MODERATION': return user ? <ModerationPanel user={user} onBack={() => setView('DASHBOARD')} /> : null;
@@ -207,9 +199,21 @@ const App: React.FC = () => {
   return (
     <div className={`h-screen bg-gray-50 flex flex-col overflow-hidden ${isFrontView ? 'front-view' : ''}`}>
       {showNavbar && <Navbar user={user} city={currentCity} activeTab={mapViewStateToTab()} setActiveTab={handleNavigationChange} onLogout={handleLogout} onSelectCity={() => setCurrentCity(null)} />}
-      {showNavbar && <SearchBar city={currentCity} onSearch={handleSearchIntent} searchQuery={searchQuery} />}
+      {showNavbar && <SearchBar city={currentCity} onSearch={q => { setSearchQuery(q); setView('LISTINGS'); }} searchQuery={searchQuery} />}
       <main className={`flex-1 overflow-y-auto ${showNavbar ? 'pb-20 md:pb-0' : ''}`}>{renderView()}</main>
       {showNavbar && <BottomNav activeTab={mapViewStateToTab()} setActiveTab={handleNavigationChange} />}
+      
+      {/* Global Toast Container */}
+      <div className="fixed bottom-24 md:bottom-10 right-4 md:right-10 z-[1000] flex flex-col gap-3 pointer-events-none">
+        {toasts.map(toast => (
+          <div key={toast.id} className={`pointer-events-auto min-w-[280px] p-5 rounded-[1.5rem] shadow-2xl flex items-center gap-4 animate-in slide-in-from-right-10 duration-500 ${toast.type === 'error' ? 'bg-rose-600 text-white' : toast.type === 'info' ? 'bg-slate-900 text-white' : 'bg-emerald-600 text-white'}`}>
+             <div className="w-10 h-10 rounded-xl bg-white/20 flex items-center justify-center text-xl">
+               <i className={`fas ${toast.type === 'error' ? 'fa-circle-exclamation' : toast.type === 'info' ? 'fa-circle-info' : 'fa-circle-check'}`}></i>
+             </div>
+             <p className="text-xs font-black uppercase tracking-widest">{toast.message}</p>
+          </div>
+        ))}
+      </div>
     </div>
   );
 };
