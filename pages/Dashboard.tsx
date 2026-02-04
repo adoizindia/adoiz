@@ -33,11 +33,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [userTickets, setUserTickets] = useState<SupportTicket[]>([]);
   const [userTransactions, setUserTransactions] = useState<WalletTransaction[]>([]);
   const [userBanners, setUserBanners] = useState<BannerAd[]>([]);
-  
-  // Banner Upload & Crop State
-  const [cropModal, setCropModal] = useState<{ show: boolean; image: string | null; editingId: string | null }>({ show: false, image: null, editingId: null });
-  const [cropOffset, setCropOffset] = useState(0); 
-  const bannerCanvasRef = useRef<HTMLCanvasElement>(null);
 
   // Location lists
   const [countries, setCountries] = useState<Country[]>([]);
@@ -176,45 +171,25 @@ export const Dashboard: React.FC<DashboardProps> = ({
     const file = e.target.files?.[0];
     if (!file) return;
     const reader = new FileReader();
-    reader.onloadend = () => {
-      setCropModal({ show: true, image: reader.result as string, editingId });
-      setCropOffset(0);
-    };
-    reader.readAsDataURL(file);
-  };
-
-  const applyCrop = () => {
-    if (!bannerCanvasRef.current || !cropModal.image) return;
-    const canvas = bannerCanvasRef.current;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const img = new Image();
-    img.src = cropModal.image;
-    img.onload = async () => {
-      canvas.width = 1280;
-      canvas.height = 720;
-      const targetAspect = 16 / 9;
-      let sx = 0, sy = 0, sw = img.width, sh = sw / targetAspect;
-      if (img.width / img.height > targetAspect) {
-        sh = img.height; sw = sh * targetAspect; sx = (img.width - sw) / 2;
-      } else {
-        sy = ((img.height - sh) * cropOffset) / 100;
-      }
-      ctx.drawImage(img, sx, sy, sw, sh, 0, 0, 1280, 720);
-      const dataUrl = canvas.toDataURL('image/jpeg', 0.9);
-      
-      if (cropModal.editingId) {
+    reader.onloadend = async () => {
+      const dataUrl = reader.result as string;
+      if (editingId) {
         setIsProcessing('updating-banner');
-        await dbService.updateBanner(cropModal.editingId, { imageUrl: dataUrl });
-        loadDashboardData();
-        notify("Banner creative updated.", "success");
-        setIsProcessing(null);
+        try {
+          await dbService.updateBanner(editingId, { imageUrl: dataUrl });
+          loadDashboardData();
+          notify("Banner creative updated.", "success");
+        } catch (err: any) {
+          notify(err.message, "error");
+        } finally {
+          setIsProcessing(null);
+        }
       } else {
         setBannerForm(prev => ({ ...prev, imageUrl: dataUrl }));
-        notify("Creative cropped successfully.", "info");
+        notify("Creative uploaded successfully.", "info");
       }
-      setCropModal({ show: false, image: null, editingId: null });
     };
+    reader.readAsDataURL(file);
   };
 
   const handleBuyBanner = async (e: React.FormEvent) => {
@@ -376,13 +351,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
                        </div>
                     </div>
 
-                    <div className="relative aspect-video rounded-[2rem] overflow-hidden group shadow-lg border border-gray-100">
+                    <div 
+                      className="relative rounded-[2rem] overflow-hidden group shadow-lg border border-gray-100 w-full"
+                      style={{ aspectRatio: '4 / 1' }}
+                    >
                        <img src={activeBanner.imageUrl} className="w-full h-full object-cover" />
                        {activeBanner.status === 'PENDING' && (
                          <label className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer">
                             <input type="file" className="hidden" accept="image/*" onChange={(e) => handleBannerFileSelect(e, activeBanner.id)} />
                             <div className="bg-white text-gray-900 px-6 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest flex items-center gap-2">
-                               <i className="fas fa-arrows-up-down"></i> Change Creative / Align
+                               <i className="fas fa-upload"></i> Change Creative
                             </div>
                          </label>
                        )}
@@ -440,8 +418,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
                            <input required type="url" className="w-full bg-gray-50 border border-gray-100 p-4 rounded-xl font-bold" value={bannerForm.linkUrl} onChange={e => setBannerForm({...bannerForm, linkUrl: e.target.value})} placeholder="https://yourbrand.com/promo" />
                         </div>
                         <div className="space-y-1">
-                           <label className="text-[10px] font-black uppercase text-gray-400">Creative Asset (16:9)</label>
-                           <label className="flex flex-col items-center justify-center w-full aspect-video bg-gray-50 border-2 border-dashed border-gray-200 rounded-[2rem] cursor-pointer hover:bg-gray-100 transition-colors overflow-hidden relative group">
+                           <label className="text-[10px] font-black uppercase text-gray-400">Creative Asset (4:1)</label>
+                           <label 
+                            className="flex flex-col items-center justify-center w-full bg-gray-50 border-2 border-dashed border-gray-200 rounded-[2rem] cursor-pointer hover:bg-gray-100 transition-colors overflow-hidden relative group"
+                            style={{ aspectRatio: '4 / 1' }}
+                           >
                              {bannerForm.imageUrl ? (
                                <>
                                  <img src={bannerForm.imageUrl} className="w-full h-full object-cover" />
@@ -450,12 +431,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
                                  </div>
                                </>
                              ) : (
-                               <div className="text-center p-8">
-                                 <div className="w-16 h-16 bg-blue-100 text-blue-600 rounded-3xl flex items-center justify-center mx-auto mb-4 shadow-xl shadow-blue-50">
-                                   <i className="fas fa-image text-2xl"></i>
+                               <div className="text-center p-4">
+                                 <div className="w-10 h-10 bg-blue-100 text-blue-600 rounded-2xl flex items-center justify-center mx-auto mb-2 shadow-xl shadow-blue-50">
+                                   <i className="fas fa-image text-lg"></i>
                                  </div>
-                                 <p className="text-xs font-black text-gray-900 uppercase">Upload Sponsorship Banner</p>
-                                 <p className="text-[9px] font-bold text-gray-400 mt-2 uppercase tracking-widest">Recommended: 1280x720 (16:9)</p>
+                                 <p className="text-[10px] font-black text-gray-900 uppercase">Upload Sponsorship Banner</p>
+                                 <p className="text-[8px] font-bold text-gray-400 mt-1 uppercase tracking-widest">Recommended: 1200x300 (4:1)</p>
                                </div>
                              )}
                              <input type="file" className="hidden" accept="image/*" onChange={(e) => handleBannerFileSelect(e)} />
@@ -476,8 +457,12 @@ export const Dashboard: React.FC<DashboardProps> = ({
                    <div className="space-y-4">
                       {bannerHistory.map(b => (
                          <div key={b.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 space-y-3 grayscale hover:grayscale-0 transition-all">
-                            <div className="flex gap-3">
-                               <img src={b.imageUrl} className="w-20 aspect-video rounded-lg object-cover" />
+                            <div className="flex gap-3 items-center">
+                               <img 
+                                src={b.imageUrl} 
+                                className="w-20 rounded-md object-cover" 
+                                style={{ aspectRatio: '4 / 1' }}
+                               />
                                <div className="min-w-0">
                                   <p className="text-[10px] font-black uppercase text-gray-900 truncate">{b.title || 'Untitled'}</p>
                                   <p className={`text-[8px] font-black uppercase ${b.status === 'REJECTED' ? 'text-rose-500' : 'text-gray-400'}`}>{b.status}</p>
@@ -645,22 +630,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
            </div>
         </div>
       )}
-
-      {cropModal.show && (
-        <div className="fixed inset-0 z-[80] flex items-center justify-center p-4 bg-gray-900/90 backdrop-blur-md animate-in fade-in">
-           <div className="bg-white w-full max-w-3xl rounded-[2.5rem] shadow-2xl overflow-hidden">
-              <div className="bg-slate-900 p-8 text-white flex justify-between items-center"><h3 className="text-2xl font-black">Crop Banner</h3><button onClick={() => setCropModal({ show: false, image: null, editingId: null })} className="cursor-pointer"><i className="fas fa-times text-xl"></i></button></div>
-              <div className="p-10 space-y-8">
-                 <div className="relative aspect-video w-full bg-gray-100 rounded-2xl overflow-hidden">
-                    <img src={cropModal.image!} className="absolute left-0 w-full" style={{ top: `-${cropOffset}%` }} />
-                 </div>
-                 <input type="range" min="0" max="100" value={cropOffset} onChange={e => setCropOffset(Number(e.target.value))} className="w-full h-2 bg-gray-100 rounded-lg appearance-none cursor-pointer accent-blue-600" />
-                 <button onClick={applyCrop} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-[11px] shadow-xl cursor-pointer hover:bg-blue-700 active:scale-95 transition-all">Finalize Asset</button>
-              </div>
-           </div>
-        </div>
-      )}
-      <canvas ref={bannerCanvasRef} className="hidden" />
     </div>
   );
 };

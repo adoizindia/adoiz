@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { Listing, User, BannerAd } from '../types';
 import { dbService } from '../services/dbService';
@@ -262,10 +261,13 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
         </div>
       </div>
 
-      {/* City-Locked Banner Advertisement */}
+      {/* City-Locked Banner Advertisement - Updated to 4:1 ratio */}
       {banners.length > 0 && (
         <div className="mb-6 rounded-[2rem] overflow-hidden border border-gray-100 shadow-sm bg-white p-2">
-           <div className="relative aspect-video w-full">
+           <div 
+            className="relative w-full"
+            style={{ aspectRatio: '4 / 1' }}
+           >
               <a href={banners[0].linkUrl} target="_blank" rel="noopener noreferrer">
                  <img src={banners[0].imageUrl} className="w-full h-full object-cover rounded-2xl" alt="Advertisement" />
                  <div className="absolute top-2 right-2 bg-black/20 backdrop-blur-md text-white text-[7px] font-black uppercase px-2 py-0.5 rounded">Ad Placement</div>

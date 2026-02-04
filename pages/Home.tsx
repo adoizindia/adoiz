@@ -52,10 +52,13 @@ export const Home: React.FC<HomeProps> = ({ city, onSearch, onCategorySelect, on
         ))}
       </div>
 
-      {/* City-Locked Banner Carousel */}
+      {/* City-Locked Banner Carousel - Updated to 4:1 ratio */}
       {banners.length > 0 && (
         <div className="w-full max-w-7xl px-4 relative group mb-0 mt-8">
-           <div className="relative w-full aspect-video rounded-2xl md:rounded-[2rem] overflow-hidden shadow-2xl border border-gray-100 bg-gray-100">
+           <div 
+            className="relative w-full rounded-2xl md:rounded-[2rem] overflow-hidden shadow-2xl border border-gray-100 bg-gray-100"
+            style={{ aspectRatio: '4 / 1' }}
+           >
               {banners.map((banner, index) => (
                 <a 
                   key={banner.id}
