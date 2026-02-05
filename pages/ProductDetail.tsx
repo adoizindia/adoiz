@@ -23,6 +23,7 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
   const [relatedListings, setRelatedListings] = useState<Listing[]>([]);
   const [banners, setBanners] = useState<BannerAd[]>([]);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
+  const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
 
   useEffect(() => {
     // Fetch other listings in the same city
@@ -38,7 +39,22 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
     // Scroll to top when listing changes
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setActiveImageIndex(0);
+    setCurrentBannerIndex(0);
   }, [listing.id, listing.cityId]);
+
+  // Banner Auto-slider Logic
+  useEffect(() => {
+    if (banners.length <= 1) return;
+    
+    const timer = setInterval(() => {
+      setCurrentBannerIndex((prev) => (prev + 1) % banners.length);
+    }, 5000); // Switch every 5 seconds
+
+    return () => clearInterval(timer);
+  }, [banners.length]);
+
+  const nextBanner = () => setCurrentBannerIndex((prev) => (prev + 1) % banners.length);
+  const prevBanner = () => setCurrentBannerIndex((prev) => (prev - 1 + banners.length) % banners.length);
 
   const handleReveal = () => {
     setIsNumberRevealed(true);
@@ -261,17 +277,54 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
         </div>
       </div>
 
-      {/* City-Locked Banner Advertisement - Updated to 4:1 ratio */}
+      {/* Sliding Banner Carousel - Identical to Home page */}
       {banners.length > 0 && (
-        <div className="mb-6 rounded-[2rem] overflow-hidden border border-gray-100 shadow-sm bg-white p-2">
+        <div className="mb-6 relative group">
            <div 
-            className="relative w-full"
-            style={{ aspectRatio: '4 / 1' }}
+            className="relative w-full rounded-2xl md:rounded-[2rem] overflow-hidden shadow-sm border border-gray-100 bg-white p-2"
            >
-              <a href={banners[0].linkUrl} target="_blank" rel="noopener noreferrer">
-                 <img src={banners[0].imageUrl} className="w-full h-full object-cover rounded-2xl" alt="Advertisement" />
-                 <div className="absolute top-2 right-2 bg-black/20 backdrop-blur-md text-white text-[7px] font-black uppercase px-2 py-0.5 rounded">Ad Placement</div>
-              </a>
+              <div 
+                className="relative w-full overflow-hidden rounded-xl"
+                style={{ aspectRatio: '4 / 1' }}
+              >
+                {banners.map((banner, index) => (
+                  <a 
+                    key={banner.id}
+                    href={banner.linkUrl} 
+                    target="_blank" 
+                    rel="noopener noreferrer"
+                    className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentBannerIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
+                  >
+                    <img src={banner.imageUrl} className="w-full h-full object-cover" alt="Sponsor" />
+                    <div className="absolute top-2 right-2 bg-black/30 backdrop-blur-md text-white text-[7px] font-black uppercase px-2 py-0.5 rounded border border-white/20">
+                      Sponsored in {CITIES.find(c => c.id === listing.cityId)?.name}
+                    </div>
+                  </a>
+                ))}
+
+                {/* Slider Controls */}
+                {banners.length > 1 && (
+                  <>
+                    <button onClick={prevBanner} className="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-8 h-8 bg-white/20 hover:bg-white/40 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <i className="fas fa-chevron-left text-xs"></i>
+                    </button>
+                    <button onClick={nextBanner} className="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-8 h-8 bg-white/20 hover:bg-white/40 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                      <i className="fas fa-chevron-right text-xs"></i>
+                    </button>
+                    
+                    {/* Indicators */}
+                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex space-x-1.5">
+                      {banners.map((_, i) => (
+                        <button 
+                          key={i} 
+                          onClick={() => setCurrentBannerIndex(i)}
+                          className={`w-1 h-1 rounded-full transition-all ${i === currentBannerIndex ? 'bg-white w-3' : 'bg-white/40'}`}
+                        />
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
            </div>
         </div>
       )}
