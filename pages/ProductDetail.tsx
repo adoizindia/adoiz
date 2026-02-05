@@ -296,8 +296,8 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
                     className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentBannerIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
                   >
                     <img src={banner.imageUrl} className="w-full h-full object-cover" alt="Sponsor" />
-                    <div className="absolute top-2 right-2 bg-black/30 backdrop-blur-md text-white text-[7px] font-black uppercase px-2 py-0.5 rounded border border-white/20">
-                      Sponsored in {CITIES.find(c => c.id === listing.cityId)?.name}
+                    <div className="absolute top-2 right-2 bg-white/10 backdrop-blur-md text-white/60 text-[7px] font-black uppercase px-2 py-0.5 rounded border border-white/5 tracking-widest">
+                      Sponsored
                     </div>
                   </a>
                 ))}

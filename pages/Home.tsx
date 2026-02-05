@@ -68,8 +68,8 @@ export const Home: React.FC<HomeProps> = ({ city, onSearch, onCategorySelect, on
                   className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentBannerIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
                 >
                   <img src={banner.imageUrl} className="w-full h-full object-cover" alt="Sponsor" />
-                  <div className="absolute top-4 right-4 bg-black/30 backdrop-blur-md text-white text-[8px] font-black uppercase px-2 py-1 rounded border border-white/20">
-                    Sponsored in {city.name}
+                  <div className="absolute top-4 right-4 bg-white/10 backdrop-blur-md text-white/60 text-[8px] font-black uppercase px-2 py-1 rounded border border-white/5 tracking-widest">
+                    Sponsored
                   </div>
                 </a>
               ))}
