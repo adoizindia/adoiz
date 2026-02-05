@@ -122,6 +122,10 @@ export interface SystemConfig {
     supportEmail: string;
     supportPhone: string;
     address: string;
+    appName?: string;
+    splashLogo?: string;
+    statusColor?: string;
+    pwaIcon?: string;
     social: {
       facebook: string;
       instagram: string;
@@ -151,7 +155,6 @@ export interface SystemConfig {
   emailGateway: {
     selected: 'sendgrid' | 'mailgun' | 'ses';
     sendgrid: { active: boolean; apiKey: string; fromEmail: string; };
-    // Fix: renamed 'gun' to 'mailgun' to match its literal value in 'selected' and the implementation in dbService.ts
     mailgun: { active: boolean; apiKey: string; domain: string; fromEmail: string; };
     ses: { active: boolean; accessKey: string; secretKey: string; region: string; fromEmail: string; };
   };

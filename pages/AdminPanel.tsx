@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { dbService } from '../services/dbService';
 import { 
@@ -150,6 +151,9 @@ export const AdminPanel: React.FC<{
           setDetailStates(dbService.getStates(state.countryId));
           setDetailCities(dbService.getCities(u.stateId));
         }
+      } else {
+        setDetailStates([]);
+        setDetailCities([]);
       }
     }
     setIsProcessing(false);
@@ -359,6 +363,29 @@ export const AdminPanel: React.FC<{
     }
   };
 
+  const handleConfigLogoUpload = (e: React.ChangeEvent<HTMLInputElement>, field: string) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => {
+      const base64 = reader.result as string;
+      if (field.includes('.')) {
+        const [parent, child] = field.split('.');
+        const parentKey = parent as keyof SystemConfig;
+        setConfig({
+          ...config,
+          [parentKey]: {
+            ...(config[parentKey] as any),
+            [child]: base64
+          }
+        });
+      } else {
+        setConfig({ ...config, [field as keyof SystemConfig]: base64 });
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+
   const handleBannerStatusUpdate = async (id: string, status: BannerAd['status']) => {
     let reason = '';
     if (status === 'REJECTED') {
@@ -539,7 +566,7 @@ export const AdminPanel: React.FC<{
                    <button onClick={() => {
                      const updated = { ...config.paymentGateway, [gw.id]: { ...gwData, active: !gwData.active } };
                      setConfig({ ...config, paymentGateway: updated as any });
-                   }} className={`w-12 h-6 rounded-full relative transition-all ${gwData.active ? 'bg-emerald-500' : 'bg-gray-200'}`}>
+                   }} className={`w-12 h-6 rounded-full relative transition-all ${gwData.active ? 'bg-emerald-50' : 'bg-gray-200'}`}>
                      <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${gwData.active ? 'left-7' : 'left-1'}`}></div>
                    </button>
                  </div>
@@ -1040,7 +1067,6 @@ export const AdminPanel: React.FC<{
           </button>
         </div>
 
-        {/* User Profile Header */}
         <div className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm flex flex-col md:flex-row items-center gap-8">
            <div className="relative group">
               <img src={detailUser.photo} className="w-24 h-24 rounded-[2rem] object-cover ring-4 ring-gray-50 shadow-md" alt="" />
@@ -1064,7 +1090,6 @@ export const AdminPanel: React.FC<{
            </div>
         </div>
 
-        {/* Modular Navigation Tabs */}
         <div className="flex items-center space-x-2 bg-gray-100/50 p-1.5 rounded-[1.8rem] w-fit border border-gray-100">
            {(['IDENTITY', 'FINANCIAL', 'INVENTORY', 'GEO_ANCHOR'] as UserDetailTab[]).map(tab => (
              <button
@@ -1077,10 +1102,10 @@ export const AdminPanel: React.FC<{
            ))}
         </div>
 
-        {/* Tab Content Rendering */}
         <div className="mt-4 animate-in fade-in zoom-in-95 duration-300">
            {activeUserDetailTab === 'IDENTITY' && (
-             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Profile Information */}
                 <div className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm space-y-6">
                    <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-500">Identity Nodes</h4>
                    <div className="space-y-4">
@@ -1102,30 +1127,79 @@ export const AdminPanel: React.FC<{
                             <input type="text" className="w-full bg-gray-50 border border-gray-100 p-4 rounded-2xl font-bold text-xs outline-none focus:bg-white transition-all" value={detailUser.whatsapp} onChange={e => setDetailUser({...detailUser, whatsapp: e.target.value})} />
                         </div>
                       </div>
+                      
+                      {/* Account Role Field */}
+                      <div className="pt-4 border-t border-gray-50">
+                        <label className="text-[9px] font-black uppercase text-gray-400 ml-1">Account Protocol Role</label>
+                        <select 
+                          className="w-full mt-2 bg-blue-50 border border-blue-100 p-4 rounded-2xl font-black text-[10px] uppercase tracking-widest text-blue-600 outline-none"
+                          value={detailUser.role}
+                          onChange={(e) => setDetailUser({...detailUser, role: e.target.value as UserRole})}
+                        >
+                          <option value={UserRole.USER}>End User (Standard)</option>
+                          <option value={UserRole.MODERATOR}>Moderator (Jurisdiction Gatekeeper)</option>
+                          <option value={UserRole.ADMIN}>System Admin (Full Access)</option>
+                        </select>
+                      </div>
                    </div>
                 </div>
-                <div className="bg-slate-900 p-8 rounded-[3rem] text-white space-y-6 shadow-xl">
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Governance Overrides</h4>
-                    <div className="space-y-4">
-                        <div className="flex items-center justify-between p-6 bg-white/5 rounded-2xl border border-white/10">
-                            <div>
-                                <p className="text-[10px] font-black uppercase">Service Suspension</p>
-                                <p className={`text-[8px] font-bold uppercase ${detailUser.isSuspended ? 'text-rose-400' : 'text-emerald-400'}`}>{detailUser.isSuspended ? 'Restricted Entity' : 'Authorized Entity'}</p>
-                            </div>
-                            <button onClick={() => { setDetailUser({...detailUser, isSuspended: !detailUser.isSuspended}); notify("Suspension state toggled locally. Commit to save.", "info"); }} className={`w-12 h-6 rounded-full relative transition-all shadow-inner ${detailUser.isSuspended ? 'bg-rose-500' : 'bg-emerald-500'}`}>
-                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-md ${detailUser.isSuspended ? 'left-7' : 'left-1'}`}></div>
+
+                {/* Governance Overrides */}
+                <div className="space-y-8">
+                  <div className="bg-slate-900 p-8 rounded-[3rem] text-white space-y-6 shadow-xl">
+                      <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-400">Governance Protocol</h4>
+                      <div className="space-y-4">
+                          <div className="flex items-center justify-between p-6 bg-white/5 rounded-2xl border border-white/10">
+                              <div>
+                                  <p className="text-[10px] font-black uppercase">Service Suspension</p>
+                                  <p className={`text-[8px] font-bold uppercase ${detailUser.isSuspended ? 'text-rose-400' : 'text-emerald-400'}`}>{detailUser.isSuspended ? 'Restricted Entity' : 'Authorized Entity'}</p>
+                              </div>
+                              <button onClick={() => { setDetailUser({...detailUser, isSuspended: !detailUser.isSuspended}); notify("Suspension state toggled locally. Commit to save.", "info"); }} className={`w-12 h-6 rounded-full relative transition-all shadow-inner ${detailUser.isSuspended ? 'bg-rose-500' : 'bg-emerald-500'}`}>
+                                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all shadow-md ${detailUser.isSuspended ? 'left-7' : 'left-1'}`}></div>
+                              </button>
+                          </div>
+                          <div className="flex items-center justify-between p-6 bg-white/5 rounded-2xl border border-white/10">
+                              <div>
+                                  <p className="text-[10px] font-black uppercase">Professional Verification</p>
+                                  <p className="text-[8px] font-bold text-slate-400 uppercase">Verification Badge Activation</p>
+                              </div>
+                              <button onClick={() => { setDetailUser({...detailUser, isVerified: !detailUser.isVerified}); notify("Verification state toggled locally. Commit to save.", "info"); }} className={`w-12 h-6 rounded-full relative transition-all ${detailUser.isVerified ? 'bg-blue-500' : 'bg-slate-700'}`}>
+                                  <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${detailUser.isVerified ? 'left-7' : 'left-1'}`}></div>
+                              </button>
+                          </div>
+                      </div>
+                  </div>
+
+                  {/* Managed Jurisdictions for Moderators */}
+                  {detailUser.role === UserRole.MODERATOR && (
+                    <div className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm space-y-6 animate-in slide-in-from-right-4 duration-500">
+                      <div className="flex items-center justify-between">
+                        <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-500">Managed Jurisdictions</h4>
+                        <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[8px] font-black">ASSIGNED CITIES</span>
+                      </div>
+                      <div className="max-h-48 overflow-y-auto custom-scrollbar pr-2 grid grid-cols-1 gap-2">
+                        {cities.map(city => {
+                          const isAssigned = detailUser.managedCityIds?.includes(city.id);
+                          return (
+                            <button 
+                              key={city.id}
+                              onClick={() => {
+                                const currentAssigned = detailUser.managedCityIds || [];
+                                const nextAssigned = isAssigned 
+                                  ? currentAssigned.filter(id => id !== city.id)
+                                  : [...currentAssigned, city.id];
+                                setDetailUser({...detailUser, managedCityIds: nextAssigned});
+                              }}
+                              className={`flex items-center justify-between p-4 rounded-xl text-left transition-all border ${isAssigned ? 'bg-blue-600 text-white border-blue-700 shadow-lg' : 'bg-gray-50 text-gray-500 border-gray-100 hover:bg-white'}`}
+                            >
+                              <span className="text-[10px] font-black uppercase">{city.name}</span>
+                              {isAssigned ? <i className="fas fa-check-circle"></i> : <i className="far fa-circle opacity-30"></i>}
                             </button>
-                        </div>
-                        <div className="flex items-center justify-between p-6 bg-white/5 rounded-2xl border border-white/10">
-                            <div>
-                                <p className="text-[10px] font-black uppercase">Professional Verification</p>
-                                <p className="text-[8px] font-bold text-slate-400 uppercase">Verification Badge Activation</p>
-                            </div>
-                            <button onClick={() => { setDetailUser({...detailUser, isVerified: !detailUser.isVerified}); notify("Verification state toggled locally. Commit to save.", "info"); }} className={`w-12 h-6 rounded-full relative transition-all ${detailUser.isVerified ? 'bg-blue-500' : 'bg-slate-700'}`}>
-                                <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${detailUser.isVerified ? 'left-7' : 'left-1'}`}></div>
-                            </button>
-                        </div>
+                          );
+                        })}
+                      </div>
                     </div>
+                  )}
                 </div>
              </div>
            )}
@@ -1172,9 +1246,6 @@ export const AdminPanel: React.FC<{
                                     </td>
                                 </tr>
                                 ))}
-                                {detailTxns.length === 0 && (
-                                    <tr><td colSpan={3} className="py-20 text-center text-gray-300 font-black uppercase text-[10px] tracking-widest italic">No transactions indexed.</td></tr>
-                                )}
                             </tbody>
                         </table>
                     </div>
@@ -1206,21 +1277,11 @@ export const AdminPanel: React.FC<{
                               <p className="text-[8px] font-black text-gray-400 uppercase tracking-widest"><i className="fas fa-eye mr-1"></i> {ad.views} Views</p>
                               <div className="flex gap-2">
                                 <button onClick={() => setSelectedListingId(ad.id)} className="w-8 h-8 rounded-lg bg-gray-100 text-gray-400 hover:text-blue-600 flex items-center justify-center transition-all"><i className="fas fa-pen text-[10px]"></i></button>
-                                <button onClick={() => {
-                                  const nextStatus = ad.status === ListingStatus.DISABLED ? ListingStatus.APPROVED : ListingStatus.DISABLED;
-                                  dbService.adminToggleListingStatus(ad.id, nextStatus, user.id).then(() => {
-                                    loadUserDetails(detailUser.id);
-                                    notify(`Ad status updated to ${nextStatus}`, "info");
-                                  });
-                                }} className={`w-8 h-8 rounded-lg flex items-center justify-center transition-all ${ad.status === ListingStatus.DISABLED ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                                  <i className={`fas ${ad.status === ListingStatus.DISABLED ? 'fa-eye-slash' : 'fa-eye'}`}></i>
-                                </button>
                               </div>
                            </div>
                         </div>
                      </div>
                    ))}
-                   {detailAds.length === 0 && <div className="col-span-full py-20 text-center text-gray-300 uppercase font-black tracking-widest italic text-sm">No inventory indexed.</div>}
                 </div>
              </div>
            )}
@@ -1253,11 +1314,15 @@ export const AdminPanel: React.FC<{
                     </div>
                     <div className="space-y-2">
                         <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Primary Operational Hub (City)</label>
-                        <select className="w-full bg-gray-50 border border-gray-100 p-5 rounded-2xl font-bold text-sm outline-none focus:bg-white transition-all" value={detailUser.cityId} onChange={e => { setDetailUser({...detailUser, cityId: e.target.value}); notify("Location changed locally. Commit to save.", "info"); }}>
+                        <select className="w-full bg-gray-50 border border-gray-100 p-5 rounded-2xl font-bold text-sm outline-none focus:bg-white transition-all" value={detailUser.cityId} onChange={e => setDetailUser({...detailUser, cityId: e.target.value})}>
                             <option value="">Select City</option>
                             {detailCities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                         </select>
                     </div>
+                </div>
+                <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Postal Address / Headquarters</label>
+                    <textarea rows={3} className="w-full bg-gray-50 border border-gray-100 p-6 rounded-[2rem] font-bold text-sm outline-none focus:bg-white transition-all" value={detailUser.address} onChange={e => setDetailUser({...detailUser, address: e.target.value})} placeholder="Full physical address..." />
                 </div>
              </div>
            )}
@@ -1420,26 +1485,91 @@ export const AdminPanel: React.FC<{
           </div>
         );
       case 'SYSTEM':
+        if (activeTab === 'site') {
+          return (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+                {/* Platform Core Identity */}
+                <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center shadow-sm">
+                      <i className="fas fa-globe"></i>
+                    </div>
+                    <h4 className="font-black text-gray-900 uppercase text-xs tracking-widest">Platform Core Identity</h4>
+                  </div>
+                  <div className="space-y-5">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Platform Name</label>
+                      <input type="text" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold text-sm outline-none focus:bg-white transition-all" value={config.siteName} onChange={e => setConfig({...config, siteName: e.target.value})} />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Tagline / Slogan</label>
+                      <input type="text" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold text-sm outline-none focus:bg-white transition-all" value={config.branding.siteTagline} onChange={e => setConfig({...config, branding: {...config.branding, siteTagline: e.target.value}})} />
+                    </div>
+                  </div>
+                </div>
+
+                {/* App / PWA Branding */}
+                <div className="bg-slate-900 p-10 rounded-[3rem] shadow-xl text-white space-y-6">
+                  <div className="flex items-center gap-3 mb-4">
+                    <div className="w-10 h-10 bg-white/10 text-blue-400 rounded-xl flex items-center justify-center">
+                      <i className="fas fa-mobile-screen"></i>
+                    </div>
+                    <h4 className="font-black text-white uppercase text-xs tracking-widest">App / PWA Branding</h4>
+                  </div>
+                  <div className="space-y-5">
+                    <div className="space-y-1">
+                      <label className="text-[10px] font-black uppercase text-slate-400 ml-1">App Display Name</label>
+                      <input type="text" className="w-full bg-white/10 border border-white/20 p-4 rounded-2xl font-bold text-sm text-white outline-none focus:bg-white/20 transition-all" value={config.branding.appName || config.siteName} onChange={e => setConfig({...config, branding: {...config.branding, appName: e.target.value}})} />
+                    </div>
+                  </div>
+                </div>
+              </div>
+              
+              <button onClick={handleConfigCommit} className="w-full bg-blue-600 text-white py-5 rounded-[2.5rem] font-black uppercase text-xs tracking-[0.2em] shadow-2xl hover:shadow-blue-200 transition-all flex items-center justify-center gap-3">
+                {isProcessing ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-shield-check"></i>} Commit All Branding Variables
+              </button>
+            </div>
+          );
+        }
+
+        if (activeTab === 'logs') {
+          return (
+            <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm animate-in fade-in duration-500">
+               <h4 className="font-black text-gray-900 uppercase text-xs tracking-widest mb-6">Full Security Log Audit</h4>
+               <div className="max-h-[600px] overflow-y-auto custom-scrollbar space-y-3">
+                 {logs.map(log => (
+                   <div key={log.id} className="p-5 bg-gray-50 rounded-2xl border border-gray-100 text-xs">
+                     <div className="flex justify-between items-start mb-2">
+                       <div className="flex items-center gap-3">
+                          <span className={`px-2 py-0.5 rounded text-[8px] font-black uppercase ${log.severity === 'CRITICAL' ? 'bg-rose-100 text-rose-600' : 'bg-blue-100 text-blue-600'}`}>{log.severity}</span>
+                          <span className="font-black uppercase text-gray-900">{log.action}</span>
+                       </div>
+                       <span className="text-gray-400 font-bold text-[10px]">{new Date(log.timestamp).toLocaleString()}</span>
+                     </div>
+                     <p className="text-gray-600 italic leading-relaxed">"{log.details}"</p>
+                   </div>
+                 ))}
+               </div>
+            </div>
+          );
+        }
+
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-6">
-               <h4 className="font-black text-gray-900 uppercase text-xs tracking-widest">Platform Core Identity</h4>
+               <h4 className="font-black text-gray-900 uppercase text-xs tracking-widest">System Maintenance Control</h4>
                <div className="space-y-4">
-                  <div className="space-y-1">
-                     <label className="text-[9px] font-black uppercase text-gray-400">Site Title</label>
-                     <input type="text" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={config.siteName} onChange={e => setConfig({...config, siteName: e.target.value})} />
-                  </div>
                   <div className="p-6 bg-amber-50 border border-amber-100 rounded-[2rem] flex items-center justify-between">
                      <div>
                         <p className="text-[10px] font-black text-amber-900 uppercase">Maintenance Mode</p>
-                        <p className="text-[8px] font-bold text-amber-600 uppercase">Global Lock</p>
                      </div>
                      <button onClick={() => { setConfig({...config, maintenanceMode: !config.maintenanceMode}); notify("Maintenance mode toggled.", "info"); }} className={`w-12 h-6 rounded-full relative transition-all ${config.maintenanceMode ? 'bg-amber-500' : 'bg-gray-200'}`}>
                         <div className={`absolute top-1 w-4 h-4 bg-white rounded-full transition-all ${config.maintenanceMode ? 'left-7' : 'left-1'}`}></div>
                      </button>
                   </div>
                </div>
-               <button onClick={() => { dbService.updateSystemConfig(config); notify("System variables updated.", "success"); }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest">Commit Platform Variable Changes</button>
+               <button onClick={() => { dbService.updateSystemConfig(config); notify("System variables updated.", "success"); }} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest">Commit Platform Logic</button>
             </div>
           </div>
         );
@@ -1468,28 +1598,30 @@ export const AdminPanel: React.FC<{
              <span className="text-xl font-black text-gray-900 tracking-tighter">ADOIZ PRO</span>
           </div>
         </div>
-        <nav className="flex-1 overflow-y-auto p-4 space-y-1">
+        <nav className="flex-1 overflow-y-auto p-4 space-y-1 custom-scrollbar">
           {filteredMenu.map(item => (
             <button 
               key={item.id} 
               onClick={() => { setActiveMenu(item.id); setSelectedUserId(null); setSelectedListingId(null); }}
-              className={`w-full text-left px-6 py-4 rounded-2xl text-[11px] font-black uppercase transition-all flex items-center ${activeMenu === item.id ? 'bg-blue-600 text-white shadow-xl' : 'text-gray-500 hover:bg-gray-50'}`}
+              className={`w-full text-left px-6 py-4 rounded-2xl text-[11px] font-black uppercase transition-all flex items-center group ${activeMenu === item.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-100' : 'text-gray-500 hover:bg-gray-50'}`}
             >
-              <i className={`fas ${item.icon} w-6 mr-3 text-sm`}></i>
+              <i className={`fas ${item.icon} w-6 mr-3 text-sm ${activeMenu === item.id ? 'text-white' : 'text-gray-400 group-hover:text-blue-500'}`}></i>
               {item.label}
             </button>
           ))}
         </nav>
         <div className="p-8 border-t border-gray-50 space-y-3">
-           <button onClick={onBack} className="w-full py-4 bg-gray-50 text-[10px] font-black uppercase text-gray-500 rounded-xl">Exit Core</button>
-           <button onClick={onLogout} className="w-full py-4 bg-rose-50 text-[10px] font-black uppercase text-rose-600 rounded-xl">Logout</button>
+           <button onClick={onBack} className="w-full py-4 bg-gray-50 text-[10px] font-black uppercase text-gray-500 rounded-xl hover:bg-gray-100 transition-all border border-gray-100">Exit Core</button>
+           <button onClick={onLogout} className="w-full py-4 bg-rose-50 text-[10px] font-black uppercase text-rose-600 rounded-xl hover:bg-rose-100 transition-all border border-rose-100">Logout</button>
         </div>
       </aside>
       <main className="flex-1 flex flex-col overflow-hidden relative">
         <header className="bg-white border-b border-gray-100 p-8 pb-0 z-20">
           <div className="flex justify-between items-center mb-8">
             <h2 className="text-3xl font-black text-gray-900 tracking-tight uppercase">
-               {filteredMenu.find(m => m.id === activeMenu)?.label || activeMenu}
+               {selectedUserId ? 'Entity Detail Console' : 
+                selectedListingId ? 'Inventory Asset Console' : 
+                (filteredMenu.find(m => m.id === activeMenu)?.label || activeMenu)}
             </h2>
             <div className="flex items-center gap-4">
                <div className="text-right">
@@ -1499,19 +1631,20 @@ export const AdminPanel: React.FC<{
                <img src={user.photo} className="w-10 h-10 rounded-xl object-cover ring-2 ring-blue-50" />
             </div>
           </div>
+
           <div className="flex items-center space-x-2 overflow-x-auto hide-scrollbar pb-2">
             {!selectedUserId && !selectedListingId && getTabsForMenu(activeMenu).map(tab => (
               <button
                 key={tab.id}
                 onClick={() => { setActiveTab(tab.id); setSearchQuery(''); }}
-                className={`flex-shrink-0 px-6 py-3 rounded-t-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab.id ? 'bg-blue-50 text-blue-600 border-b-4 border-blue-600' : 'text-gray-400 hover:text-gray-600'}`}
+                className={`flex-shrink-0 px-6 py-3 rounded-t-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab.id ? 'bg-blue-50 text-blue-600 border-b-4 border-blue-600' : 'text-gray-400 hover:text-gray-600 hover:bg-gray-100'}`}
               >
                 {tab.label}
               </button>
             ))}
           </div>
         </header>
-        <div className="flex-1 overflow-y-auto p-10">
+        <div className="flex-1 overflow-y-auto p-10 custom-scrollbar">
            {renderContent()}
         </div>
       </main>

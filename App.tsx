@@ -35,6 +35,9 @@ const App: React.FC = () => {
   const [searchQuery, setSearchQuery] = useState('');
   const [activeCategory, setActiveCategory] = useState('All');
   const [toasts, setToasts] = useState<Toast[]>([]);
+  
+  // PWA Installation State
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
 
   const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'success') => {
     const id = Date.now();
@@ -47,7 +50,19 @@ const App: React.FC = () => {
   useEffect(() => {
     const handler = (e: any) => showToast(e.detail.message, e.detail.type);
     window.addEventListener('adoiz-notify', handler);
-    return () => window.removeEventListener('adoiz-notify', handler);
+    
+    // Handle PWA Installation Prompt
+    const handleInstallPrompt = (e: Event) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      // Native prompt will now be available for the browser to trigger
+    };
+    window.addEventListener('beforeinstallprompt', handleInstallPrompt);
+
+    return () => {
+      window.removeEventListener('adoiz-notify', handler);
+      window.removeEventListener('beforeinstallprompt', handleInstallPrompt);
+    };
   }, [showToast]);
 
   const handleSocialAuth = async (email: string, name: string, photo: string, provider: 'google' | 'facebook') => {

@@ -1,9 +1,18 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>ADOIZ | City-Locked Marketplace</title>
+    
+    <!-- PWA Primary Metadata -->
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="default">
+    <meta name="apple-mobile-web-app-title" content="ADOIZ">
+    <link rel="apple-touch-icon" href="https://picsum.photos/seed/adoiz/192">
+    
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
@@ -22,7 +31,6 @@
         .hide-scrollbar::-webkit-scrollbar { display: none; }
         .hide-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
         
-        /* Typography reset for front-view headings to match body text size */
         .front-view h1, 
         .front-view h2, 
         .front-view h3, 
@@ -32,6 +40,59 @@
             font-size: 1rem !important;
         }
     </style>
+    
+    <!-- Dynamic PWA Manifest and Theme Color Injection -->
+    <script>
+      (function() {
+        const storedConfig = localStorage.getItem('adoiz_config');
+        let config = { 
+          siteName: 'ADOIZ', 
+          branding: { primaryColor: '#1a73e8', appName: 'ADOIZ', pwaIcon: 'https://picsum.photos/seed/adoiz/192' } 
+        };
+        
+        if (storedConfig) {
+          try { config = JSON.parse(storedConfig); } catch(e) {}
+        }
+
+        // Set Theme Color Meta
+        const metaTheme = document.createElement('meta');
+        metaTheme.name = "theme-color";
+        metaTheme.content = config.branding?.statusColor || config.branding?.primaryColor || "#1a73e8";
+        document.head.appendChild(metaTheme);
+
+        // Generate Dynamic Manifest
+        const manifest = {
+          "name": config.branding?.appName || config.siteName || "ADOIZ",
+          "short_name": config.branding?.appName || config.siteName || "ADOIZ",
+          "start_url": "/",
+          "display": "standalone",
+          "background_color": "#ffffff",
+          "theme_color": config.branding?.primaryColor || "#1a73e8",
+          "icons": [
+            {
+              "src": config.branding?.pwaIcon || "https://picsum.photos/seed/adoiz/192",
+              "sizes": "192x192",
+              "type": "image/png",
+              "purpose": "any maskable"
+            },
+            {
+              "src": config.branding?.pwaIcon || "https://picsum.photos/seed/adoiz/512",
+              "sizes": "512x512",
+              "type": "image/png"
+            }
+          ]
+        };
+
+        const stringManifest = JSON.stringify(manifest);
+        const blob = new Blob([stringManifest], {type: 'application/json'});
+        const manifestURL = URL.createObjectURL(blob);
+        const link = document.createElement('link');
+        link.rel = 'manifest';
+        link.href = manifestURL;
+        document.head.appendChild(link);
+      })();
+    </script>
+
     <script type="importmap">
     {
       "imports": {
@@ -43,14 +104,24 @@
       }
     }
     </script>
-    <!-- Social Login SDKs -->
     <script src="https://accounts.google.com/gsi/client" async defer></script>
 </head>
 <body class="bg-gray-50 text-gray-900">
     <div id="root"></div>
     <div id="fb-root"></div>
     <script async defer crossorigin="anonymous" src="https://connect.facebook.net/en_US/sdk.js"></script>
-    <!-- Explicitly load the entry point as a module -->
+    
+    <!-- Service Worker Registration -->
+    <script>
+      if ('serviceWorker' in navigator) {
+        window.addEventListener('load', () => {
+          navigator.serviceWorker.register('./sw.js')
+            .then(reg => console.log('SW Registered', reg))
+            .catch(err => console.log('SW Registration Failed', err));
+        });
+      }
+    </script>
+    
     <script type="module" src="./index.tsx"></script>
 </body>
 </html>
