@@ -1,6 +1,7 @@
+
 import React, { useState, useEffect } from 'react';
 import { dbService } from '../services/dbService';
-import { Listing, ListingStatus, User, BannerAd, SupportTicket } from '../types';
+import { Listing, ListingStatus, User, BannerAd, SupportTicket, AdReport } from '../types';
 import { CITIES } from '../constants';
 
 interface ModerationPanelProps {
@@ -8,7 +9,7 @@ interface ModerationPanelProps {
   onBack: () => void;
 }
 
-type ModTab = 'ADS' | 'BANNERS' | 'TICKETS';
+type ModTab = 'ADS' | 'BANNERS' | 'TICKETS' | 'REPORTS';
 
 const notify = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
   window.dispatchEvent(new CustomEvent('adoiz-notify', { detail: { message, type } }));
@@ -19,6 +20,7 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
   const [adsQueue, setAdsQueue] = useState<Listing[]>([]);
   const [bannersQueue, setBannersQueue] = useState<BannerAd[]>([]);
   const [ticketsQueue, setTicketsQueue] = useState<SupportTicket[]>([]);
+  const [reportsQueue, setReportsQueue] = useState<AdReport[]>([]);
   
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -28,7 +30,7 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
   const [showRejectModal, setShowRejectModal] = useState(false);
   const [rejectionNote, setRejectionNote] = useState('');
   const [activeItemId, setActiveItemId] = useState<string | null>(null);
-  const [rejectionType, setRejectionType] = useState<'AD' | 'BANNER'>('AD');
+  const [rejectionType, setRejectionType] = useState<'AD' | 'BANNER' | 'REPORT_REJECT'>('AD');
 
   const managedCities = user.managedCityIds || [];
 
@@ -40,15 +42,17 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
     if (initial) setLoading(true);
     setRefreshing(true);
     
-    const [ads, banners, tickets] = await Promise.all([
+    const [ads, banners, tickets, reports] = await Promise.all([
       dbService.getModerationQueue(managedCities),
       dbService.getModerationBanners(managedCities),
-      dbService.getModerationTickets(managedCities)
+      dbService.getModerationTickets(managedCities),
+      dbService.getModerationReports(managedCities)
     ]);
 
     setAdsQueue(ads);
     setBannersQueue(banners);
     setTicketsQueue(tickets);
+    setReportsQueue(reports);
     
     setTimeout(() => { setLoading(false); setRefreshing(false); }, 500);
   };
@@ -66,6 +70,25 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
     try {
       await dbService.updateListingStatus(id, status, undefined, user.id);
       notify(`Ad approved successfully.`, "success");
+      loadAllQueues(false);
+    } catch (err: any) {
+      notify(err.message, "error");
+    } finally {
+      setIsProcessingAction(null);
+    }
+  };
+
+  const handleReportAction = async (reportId: string, listingId: string, action: 'DISMISS' | 'REMOVE_AD') => {
+    setIsProcessingAction(reportId);
+    try {
+      if (action === 'DISMISS') {
+        await dbService.resolveAdReport(reportId, 'DISMISSED');
+        notify("Report dismissed.", "info");
+      } else {
+        await dbService.updateListingStatus(listingId, ListingStatus.REJECTED, "Violation reported by users", user.id);
+        await dbService.resolveAdReport(reportId, 'RESOLVED');
+        notify("Ad removed based on report.", "error");
+      }
       loadAllQueues(false);
     } catch (err: any) {
       notify(err.message, "error");
@@ -149,17 +172,17 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
         </button>
       </div>
 
-      {/* Navigation Tabs */}
-      <div className="flex items-center space-x-2 mb-8 bg-white p-1.5 rounded-[2rem] border border-gray-100 shadow-sm w-fit">
+      <div className="flex items-center space-x-2 mb-8 bg-white p-1.5 rounded-[2rem] border border-gray-100 shadow-sm w-fit overflow-x-auto">
         {[
-          { id: 'ADS', label: 'Inventory Queue', count: adsQueue.length },
-          { id: 'BANNERS', label: 'Banner Ads', count: bannersQueue.length },
-          { id: 'TICKETS', label: 'Support Desk', count: ticketsQueue.length }
+          { id: 'ADS', label: 'Inventory', count: adsQueue.length },
+          { id: 'REPORTS', label: 'Reports', count: reportsQueue.length },
+          { id: 'BANNERS', label: 'Banners', count: bannersQueue.length },
+          { id: 'TICKETS', label: 'Support', count: ticketsQueue.length }
         ].map(tab => (
           <button 
             key={tab.id} 
             onClick={() => setActiveTab(tab.id as ModTab)} 
-            className={`px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-3 ${activeTab === tab.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-100' : 'text-gray-400 hover:bg-gray-50'}`}
+            className={`px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-3 whitespace-nowrap ${activeTab === tab.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-100' : 'text-gray-400 hover:bg-gray-50'}`}
           >
             {tab.label}
             {tab.count > 0 && <span className={`px-2 py-0.5 rounded-lg text-[8px] ${activeTab === tab.id ? 'bg-white text-blue-600' : 'bg-gray-100 text-gray-400'}`}>{tab.count}</span>}
@@ -176,7 +199,7 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
               <div className="bg-white rounded-[3rem] p-24 text-center border border-gray-100">
                 <i className="fas fa-check-circle text-4xl text-emerald-500 mb-6"></i>
                 <h3 className="text-2xl font-black text-gray-900">Inventory Clear</h3>
-                <p className="text-gray-500 mt-2">No pending ads to review in {managedCities.map(getCityName).join(', ')}.</p>
+                <p className="text-gray-500 mt-2">No pending ads to review.</p>
               </div>
             ) : (
               adsQueue.map(l => (
@@ -199,12 +222,43 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
                       <p className="text-sm text-gray-500 mt-4 line-clamp-2 leading-relaxed italic">"{l.description}"</p>
                     </div>
                     <div className="flex gap-3 mt-8">
-                      <button onClick={() => handleAdAction(l.id, ListingStatus.APPROVED)} disabled={isProcessingAction === l.id} className="flex-1 bg-emerald-600 text-white px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2">
-                        {isProcessingAction === l.id ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-check"></i>} Authorize Asset
-                      </button>
-                      <button onClick={() => handleAdAction(l.id, ListingStatus.REJECTED)} disabled={isProcessingAction === l.id} className="flex-1 bg-white border border-rose-100 text-rose-600 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-50 transition-all flex items-center justify-center gap-2">
-                        {isProcessingAction === l.id ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-times"></i>} Reject Listing
-                      </button>
+                      <button onClick={() => handleAdAction(l.id, ListingStatus.APPROVED)} disabled={isProcessingAction === l.id} className="flex-1 bg-emerald-600 text-white px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2">Authorize</button>
+                      <button onClick={() => handleAdAction(l.id, ListingStatus.REJECTED)} disabled={isProcessingAction === l.id} className="flex-1 bg-white border border-rose-100 text-rose-600 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-50 transition-all flex items-center justify-center gap-2">Reject</button>
+                    </div>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {activeTab === 'REPORTS' && (
+          <div className="space-y-4">
+            {reportsQueue.length === 0 ? (
+              <div className="bg-white rounded-[3rem] p-24 text-center border border-gray-100">
+                <i className="fas fa-shield-check text-4xl text-emerald-500 mb-6"></i>
+                <h3 className="text-2xl font-black text-gray-900">Reports Clear</h3>
+                <p className="text-gray-500 mt-2">No active ad reports in your city.</p>
+              </div>
+            ) : (
+              reportsQueue.map(r => (
+                <div key={r.id} className="bg-white p-8 rounded-[2.5rem] border-l-4 border-rose-500 shadow-sm flex flex-col gap-6">
+                  <div className="flex flex-col md:flex-row justify-between items-start gap-4">
+                    <div>
+                      <div className="flex items-center gap-3 mb-2">
+                        <span className="bg-rose-50 text-rose-600 px-2 py-0.5 rounded text-[8px] font-black uppercase">{r.reason}</span>
+                        <h4 className="text-lg font-black text-gray-900">Re: {r.listingTitle}</h4>
+                      </div>
+                      <p className="text-sm text-gray-600 italic">"{r.details || 'No additional comments provided.'}"</p>
+                      <div className="flex gap-4 mt-4">
+                        <span className="text-[9px] font-black uppercase text-gray-400"><i className="fas fa-user-tag mr-1"></i> Reporter: {r.reporterName}</span>
+                        <span className="text-[9px] font-black uppercase text-gray-400"><i className="fas fa-clock mr-1"></i> {new Date(r.createdAt).toLocaleString()}</span>
+                        <span className="text-[9px] font-black uppercase text-blue-500"><i className="fas fa-location-dot mr-1"></i> {getCityName(r.cityId)}</span>
+                      </div>
+                    </div>
+                    <div className="flex md:flex-col gap-2 w-full md:w-auto">
+                      <button onClick={() => handleReportAction(r.id, r.listingId, 'REMOVE_AD')} disabled={isProcessingAction === r.id} className="flex-1 bg-rose-600 text-white px-6 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-rose-100">Remove Ad</button>
+                      <button onClick={() => handleReportAction(r.id, r.listingId, 'DISMISS')} disabled={isProcessingAction === r.id} className="flex-1 bg-gray-50 text-gray-400 px-6 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-100 border border-gray-100">Dismiss</button>
                     </div>
                   </div>
                 </div>
@@ -219,7 +273,6 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
               <div className="bg-white rounded-[3rem] p-24 text-center border border-gray-100">
                 <i className="fas fa-rectangle-ad text-4xl text-blue-500 mb-6"></i>
                 <h3 className="text-2xl font-black text-gray-900">No Banners Pending</h3>
-                <p className="text-gray-500 mt-2">All sponsorships have been moderated for your city.</p>
               </div>
             ) : (
               bannersQueue.map(b => (
@@ -227,21 +280,19 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
                   <div className="flex justify-between items-start">
                      <div>
                         <h4 className="text-xl font-black text-gray-900 uppercase">{b.title || 'Untitled Campaign'}</h4>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">Target City: <span className="text-blue-500">{getCityName(b.cityId)}</span> • User: {b.userId}</p>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">City: <span className="text-blue-500">{getCityName(b.cityId)}</span> • User: {b.userId}</p>
                      </div>
-                     <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-xl text-[9px] font-black">PENDING REVIEW</span>
+                     <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-xl text-[9px] font-black">PENDING</span>
                   </div>
-                  
                   <div className="relative group rounded-[2rem] overflow-hidden border border-gray-100" style={{ aspectRatio: '4 / 1' }}>
                     <img src={b.imageUrl} className="w-full h-full object-cover" />
                     <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
                        <a href={b.linkUrl} target="_blank" rel="noreferrer" className="bg-white text-gray-900 px-4 py-2 rounded-xl text-[9px] font-black uppercase shadow-xl">Test Link <i className="fas fa-external-link-alt ml-1"></i></a>
                     </div>
                   </div>
-
                   <div className="flex gap-3 pt-2">
-                    <button onClick={() => handleBannerAction(b.id, 'LIVE')} disabled={isProcessingAction === b.id} className="flex-1 bg-emerald-600 text-white py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-100">Activate Sponsorship</button>
-                    <button onClick={() => handleBannerAction(b.id, 'REJECTED')} disabled={isProcessingAction === b.id} className="flex-1 bg-white border border-rose-100 text-rose-600 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest">Reject Creative</button>
+                    <button onClick={() => handleBannerAction(b.id, 'LIVE')} disabled={isProcessingAction === b.id} className="flex-1 bg-emerald-600 text-white py-4 rounded-2xl text-[10px] font-black uppercase shadow-lg shadow-emerald-100">Activate</button>
+                    <button onClick={() => handleBannerAction(b.id, 'REJECTED')} disabled={isProcessingAction === b.id} className="flex-1 bg-white border border-rose-100 text-rose-600 py-4 rounded-2xl text-[10px] font-black uppercase">Reject</button>
                   </div>
                 </div>
               ))
@@ -255,7 +306,6 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
               <div className="bg-white rounded-[3rem] p-24 text-center border border-gray-100">
                 <i className="fas fa-clipboard-check text-4xl text-emerald-500 mb-6"></i>
                 <h3 className="text-2xl font-black text-gray-900">Desk Cleared</h3>
-                <p className="text-gray-500 mt-2">All user support tickets have been addressed.</p>
               </div>
             ) : (
               ticketsQueue.map(t => (
@@ -271,9 +321,7 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
                        <span className="text-[9px] font-black uppercase text-gray-400"><i className="fas fa-clock mr-1"></i> {new Date(t.createdAt).toLocaleString()}</span>
                     </div>
                   </div>
-                  <button onClick={() => handleTicketAction(t.id)} disabled={isProcessingAction === t.id} className="w-full md:w-auto bg-slate-900 text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl hover:bg-black transition-all flex items-center justify-center gap-2">
-                    {isProcessingAction === t.id ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-check-double"></i>} Resolve Ticket
-                  </button>
+                  <button onClick={() => handleTicketAction(t.id)} disabled={isProcessingAction === t.id} className="w-full md:w-auto bg-slate-900 text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl flex items-center justify-center gap-2">Resolve</button>
                 </div>
               ))
             )}
@@ -288,12 +336,12 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
                 <h3 className="text-2xl font-black">Reject {rejectionType === 'AD' ? 'Ad Listing' : 'Banner Ad'}</h3>
               </div>
               <div className="p-10 space-y-6">
-                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Please provide a reason for the user</p>
-                 <textarea rows={4} className="w-full bg-gray-50 border-2 border-gray-100 p-6 rounded-3xl text-sm font-bold outline-none focus:border-rose-300 focus:bg-white transition-all" value={rejectionNote} onChange={e => setRejectionNote(e.target.value)} placeholder="e.g. Graphic content, misleading price, incorrect city..." />
+                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Reason for review refusal</p>
+                 <textarea rows={4} className="w-full bg-gray-50 border-2 border-gray-100 p-6 rounded-3xl text-sm font-bold outline-none focus:border-rose-300 focus:bg-white transition-all" value={rejectionNote} onChange={e => setRejectionNote(e.target.value)} placeholder="e.g. Policy violation..." />
                  <button onClick={confirmRejection} disabled={isProcessingAction === activeItemId} className="w-full bg-rose-600 text-white py-5 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-rose-100 hover:bg-rose-700 transition-all flex items-center justify-center gap-2 active:scale-95">
-                    {isProcessingAction === activeItemId ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-shield-xmark mr-1"></i>} Confirm Rejection
+                    Confirm Rejection
                  </button>
-                 <button onClick={() => setShowRejectModal(false)} className="w-full py-4 text-gray-400 font-black uppercase text-[10px] tracking-widest">Cancel Review</button>
+                 <button onClick={() => setShowRejectModal(false)} className="w-full py-4 text-gray-400 font-black uppercase text-[10px] tracking-widest">Cancel</button>
               </div>
            </div>
         </div>

@@ -55,7 +55,6 @@ const App: React.FC = () => {
     const handleInstallPrompt = (e: Event) => {
       e.preventDefault();
       setDeferredPrompt(e);
-      // Native prompt will now be available for the browser to trigger
     };
     window.addEventListener('beforeinstallprompt', handleInstallPrompt);
 
@@ -196,7 +195,7 @@ const App: React.FC = () => {
       case 'AUTH': return <Auth onLogin={handleLoginSuccess} onGoogleLogin={() => (window as any).google?.accounts.id.prompt()} onFacebookLogin={() => (window as any).FB?.login()} />;
       case 'HOME': return <Home city={currentCity!} onSearch={q => { setSearchQuery(q); setView('LISTINGS'); }} onCategorySelect={c => { setActiveCategory(c); setSearchQuery(''); setView('LISTINGS'); }} onListingClick={handleListingClick} onSelectCity={() => setCurrentCity(null)} />;
       case 'LISTINGS': return <ListingFeed city={currentCity!} onListingClick={handleListingClick} onSelectCity={() => setCurrentCity(null)} searchQuery={searchQuery} category={activeCategory} onSearchChange={setSearchQuery} onCategoryChange={setActiveCategory} />;
-      case 'DETAIL': return selectedListing && selectedSeller ? <ProductDetail listing={selectedListing} seller={selectedSeller} onBack={() => setView('LISTINGS')} onContactSeller={handleContactSeller} onListingClick={handleListingClick} /> : null;
+      case 'DETAIL': return selectedListing && selectedSeller ? <ProductDetail user={user} listing={selectedListing} seller={selectedSeller} onBack={() => setView('LISTINGS')} onContactSeller={handleContactSeller} onListingClick={handleListingClick} /> : null;
       case 'DASHBOARD': return user ? <Dashboard user={user} listings={userListings} onEdit={l => { setListingToEdit(l); setView('EDIT_AD'); }} onDelete={async id => { if (window.confirm("Delete this listing permanently?")) { await dbService.deleteListing(id); loadUserListings(); showToast("Listing deleted successfully.", "error"); } }} onBoost={async id => { await dbService.upgradeListingToPremium(id, user.id); loadUserListings(); showToast("Upgraded to Premium!", "success"); }} onPostNew={() => setView('POST_AD')} onAddFunds={async a => { const u = await dbService.rechargeWallet(user.id, a); if (u) { setUser(u); showToast(`Wallet recharged with ₹${a}`, "success"); } }} onUpdateUser={u => setUser(u)} onLogout={handleLogout} onAdminPanel={() => setView('ADMIN_PANEL')} onModerationPanel={() => setView('MODERATION')} /> : null;
       case 'POST_AD': return user ? <PostAd user={user} city={currentCity!} onUpdateUser={u => setUser(u)} onSuccess={() => { setView('DASHBOARD'); showToast("Ad posted successfully!", "success"); }} onCancel={() => setView('DASHBOARD')} /> : null;
       case 'EDIT_AD': return user && listingToEdit ? <PostAd user={user} city={currentCity!} onUpdateUser={u => setUser(u)} editListing={listingToEdit} onSuccess={() => { setView('DASHBOARD'); showToast("Ad updated successfully!", "success"); }} onCancel={() => setView('DASHBOARD')} /> : null;

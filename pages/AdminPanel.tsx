@@ -1343,6 +1343,12 @@ export const AdminPanel: React.FC<{
     
     switch(activeMenu) {
       case 'USERS':
+        const filteredUsers = users.filter(u => {
+          const matchesSearch = (u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.email.toLowerCase().includes(searchQuery.toLowerCase()));
+          const matchesRole = (userFilterRole === 'ALL' || u.role === userFilterRole);
+          const matchesTab = activeTab === 'verification' ? !u.isVerified : true;
+          return matchesSearch && matchesRole && matchesTab;
+        });
         return (
           <div className="bg-white rounded-3xl border border-gray-100 overflow-hidden shadow-sm animate-in fade-in">
             <div className="p-8 border-b border-gray-50 flex flex-col md:flex-row justify-between items-center gap-4 bg-gray-50/30">
@@ -1376,10 +1382,7 @@ export const AdminPanel: React.FC<{
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-50">
-                  {users.filter(u => 
-                    (u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.email.toLowerCase().includes(searchQuery.toLowerCase())) &&
-                    (userFilterRole === 'ALL' || u.role === userFilterRole)
-                  ).map(u => (
+                  {filteredUsers.map(u => (
                     <tr key={u.id} className="hover:bg-gray-50 transition-colors group">
                       <td className="px-8 py-5">
                         <div className="flex items-center gap-3">
@@ -1418,9 +1421,18 @@ export const AdminPanel: React.FC<{
         const filteredListings = listings.filter(l => {
           const matchesSearch = l.title.toLowerCase().includes(searchQuery.toLowerCase()) || 
                               l.id.toLowerCase().includes(searchQuery.toLowerCase());
-          const matchesStatus = listingFilterStatus === 'ALL' || l.status === listingFilterStatus;
           const matchesCategory = listingFilterCategory === 'ALL' || l.category === listingFilterCategory;
-          return matchesSearch && matchesStatus && matchesCategory;
+          
+          let matchesTab = true;
+          if (activeTab === 'pending') {
+            matchesTab = l.status === ListingStatus.PENDING || l.status === ListingStatus.EDIT_PENDING;
+          } else if (activeTab === 'banner_inventory') {
+            matchesTab = false; // Not applicable here
+          }
+          
+          const matchesStatusFilter = listingFilterStatus === 'ALL' || l.status === listingFilterStatus;
+          
+          return matchesSearch && matchesCategory && matchesTab && matchesStatusFilter;
         });
         return (
           <div className="space-y-6 animate-in fade-in">
@@ -1603,7 +1615,8 @@ export const AdminPanel: React.FC<{
             <button 
               key={item.id} 
               onClick={() => { setActiveMenu(item.id); setSelectedUserId(null); setSelectedListingId(null); }}
-              className={`w-full text-left px-6 py-4 rounded-2xl text-[11px] font-black uppercase transition-all flex items-center group ${activeMenu === item.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-100' : 'text-gray-500 hover:bg-gray-50'}`}
+              className={`w-full text-left px-6 py-4 rounded-2xl text-[11px] font-black uppercase transition-all flex items-center group ${setActiveMenu === item.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-100' : 'text-gray-500 hover:bg-gray-50'}`}
+              style={{ backgroundColor: activeMenu === item.id ? '#2563eb' : 'transparent', color: activeMenu === item.id ? 'white' : '#6b7280' }}
             >
               <i className={`fas ${item.icon} w-6 mr-3 text-sm ${activeMenu === item.id ? 'text-white' : 'text-gray-400 group-hover:text-blue-500'}`}></i>
               {item.label}

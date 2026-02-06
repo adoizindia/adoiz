@@ -43,6 +43,19 @@ export interface SupportTicket {
   createdAt: string;
 }
 
+export interface AdReport {
+  id: string;
+  listingId: string;
+  listingTitle: string;
+  reporterId: string;
+  reporterName: string;
+  cityId: string;
+  reason: 'SPAM' | 'FRAUD' | 'MISLEADING' | 'INAPPROPRIATE' | 'OTHER';
+  details: string;
+  status: 'PENDING' | 'RESOLVED' | 'DISMISSED';
+  createdAt: string;
+}
+
 export interface BannerAd {
   id: string;
   userId: string;

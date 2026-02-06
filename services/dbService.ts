@@ -1,5 +1,5 @@
 import { 
-  User, Listing, Category, BannerAd, SupportTicket, 
+  User, Listing, Category, BannerAd, SupportTicket, AdReport,
   WalletTransaction, SystemConfig, City, State, Country,
   ListingStatus, UserRole, Chat, Message, BackupArchive, SecurityLog
 } from '../types';
@@ -17,6 +17,7 @@ class DbService {
   private banners: BannerAd[] = [];
   private transactions: WalletTransaction[] = [];
   private tickets: SupportTicket[] = [];
+  private reports: AdReport[] = [];
   private chats: Chat[] = [];
   private messages: Message[] = [];
   private securityLogs: SecurityLog[] = [];
@@ -116,6 +117,7 @@ class DbService {
     this.chats = JSON.parse(localStorage.getItem('adoiz_chats') || '[]');
     this.messages = JSON.parse(localStorage.getItem('adoiz_messages') || '[]');
     this.tickets = JSON.parse(localStorage.getItem('adoiz_tickets') || '[]');
+    this.reports = JSON.parse(localStorage.getItem('adoiz_reports') || '[]');
     this.transactions = JSON.parse(localStorage.getItem('adoiz_txns') || '[]');
 
     const defaultCats = [
@@ -140,10 +142,11 @@ class DbService {
     localStorage.setItem('adoiz_chats', JSON.stringify(this.chats));
     localStorage.setItem('adoiz_messages', JSON.stringify(this.messages));
     localStorage.setItem('adoiz_tickets', JSON.stringify(this.tickets));
+    localStorage.setItem('adoiz_reports', JSON.stringify(this.reports));
     localStorage.setItem('adoiz_txns', JSON.stringify(this.transactions));
   }
 
-  getSystemConfig(): SystemConfig { return this.config; }
+  getSystemConfig(): SystemConfig { return { ...this.config }; }
   updateSystemConfig(updates: Partial<SystemConfig>): void { 
     this.config = { ...this.config, ...updates }; 
     this.addSecurityLog('CONFIG_UPDATE', 'System configuration modified', 'MEDIUM');
@@ -175,16 +178,21 @@ class DbService {
     }
     this.users[idx] = { ...this.users[idx], ...updates };
     this.persist();
-    return this.users[idx];
+    return { ...this.users[idx] };
   }
 
   async adminAdjustWallet(userId: string, amount: number, type: 'CREDIT' | 'DEBIT', reason: string, adminId: string): Promise<User> {
     const idx = this.users.findIndex(u => u.id === userId);
     if (idx === -1) throw new Error("User not found");
     if (!reason.trim()) throw new Error("Reason is mandatory for adjustments");
+    
+    // Create fresh object in array
+    this.users[idx] = { ...this.users[idx] };
     const user = this.users[idx];
+    
     if (type === 'DEBIT' && user.walletBalance < amount) throw new Error("Insufficient funds for debit");
     user.walletBalance += (type === 'CREDIT' ? amount : -amount);
+    
     const txn: WalletTransaction = { id: 'tx' + Date.now(), userId, amount, type, description: `ADMIN ADJ: ${reason}`, timestamp: new Date().toISOString() };
     this.transactions.push(txn);
     this.addSecurityLog('WALLET_ADMIN_ADJ', `${type} of ${amount} for ${userId}`, 'MEDIUM', adminId);
@@ -236,14 +244,41 @@ class DbService {
 
   async recordView(id: string): Promise<void> { const idx = this.listings.findIndex(x => x.id === id); if (idx !== -1) { this.listings[idx].views++; this.persist(); } }
 
-  async getAllUsers(): Promise<User[]> { return [...this.users]; }
-  async getUserById(id: string): Promise<User | null> { return this.users.find(u => u.id === id) || null; }
-  async registerUser(data: Partial<User>): Promise<User> { const newUser = { id: 'u' + Date.now(), walletBalance: 0, role: UserRole.USER, isVerified: false, isSuspended: false, isBanned: false, ...data } as User; this.users.push(newUser); this.persist(); return newUser; }
-  async updateUser(id: string, updates: Partial<User>): Promise<User | null> { const idx = this.users.findIndex(u => u.id === id); if (idx === -1) return null; this.users[idx] = { ...this.users[idx], ...updates }; this.persist(); return this.users[idx]; }
-  async rechargeWallet(userId: string, amount: number): Promise<User | null> { const idx = this.users.findIndex(u => u.id === userId); if (idx === -1) return null; const user = this.users[idx]; user.walletBalance += amount; this.transactions.push({ id: 'tx' + Date.now(), userId, amount, type: 'CREDIT', description: 'User Recharge', timestamp: new Date().toISOString() }); this.persist(); return user; }
+  async getAllUsers(): Promise<User[]> { return this.users.map(u => ({ ...u })); }
+  async getUserById(id: string): Promise<User | null> { const u = this.users.find(u => u.id === id); return u ? { ...u } : null; }
+  async registerUser(data: Partial<User>): Promise<User> { const newUser = { id: 'u' + Date.now(), walletBalance: 0, role: UserRole.USER, isVerified: false, isSuspended: false, isBanned: false, ...data } as User; this.users.push(newUser); this.persist(); return { ...newUser }; }
+  async updateUser(id: string, updates: Partial<User>): Promise<User | null> { const idx = this.users.findIndex(u => u.id === id); if (idx === -1) return null; this.users[idx] = { ...this.users[idx], ...updates }; this.persist(); return { ...this.users[idx] }; }
+  
+  async rechargeWallet(userId: string, amount: number): Promise<User | null> { 
+    const idx = this.users.findIndex(u => u.id === userId); 
+    if (idx === -1) return null; 
+    
+    // Ensure we replace with a new reference for React
+    this.users[idx] = { ...this.users[idx] };
+    const user = this.users[idx]; 
+    user.walletBalance += amount; 
+    
+    this.transactions.push({ id: 'tx' + Date.now(), userId, amount, type: 'CREDIT', description: 'User Recharge', timestamp: new Date().toISOString() }); 
+    this.persist(); 
+    return { ...user }; 
+  }
+  
   async getTransactionsByUserId(userId: string): Promise<WalletTransaction[]> { return this.transactions.filter(t => t.userId === userId); }
   async getAllTransactions(): Promise<WalletTransaction[]> { return [...this.transactions]; }
-  async activateBlueTick(userId: string): Promise<User | null> { const user = await this.getUserById(userId); if (!user || user.walletBalance < this.config.blueTickPrice) throw new Error("Funds required"); await this.adminAdjustWallet(userId, this.config.blueTickPrice, 'DEBIT', 'Blue Tick Activation', 'SYSTEM'); return this.updateUser(userId, { isVerified: true, blueTickUntil: new Date(Date.now() + 86400000 * this.config.blueTickDurationDays).toISOString() }); }
+  
+  async activateBlueTick(userId: string): Promise<User | null> { 
+    const user = await this.getUserById(userId); 
+    if (!user || user.walletBalance < this.config.blueTickPrice) throw new Error("Funds required"); 
+    
+    // Deduct funds first
+    await this.adminAdjustWallet(userId, this.config.blueTickPrice, 'DEBIT', 'Blue Tick Activation', 'SYSTEM'); 
+    
+    // Update verification status and return new reference
+    return this.updateUser(userId, { 
+      isVerified: true, 
+      blueTickUntil: new Date(Date.now() + 86400000 * this.config.blueTickDurationDays).toISOString() 
+    }); 
+  }
 
   async getModerationQueue(cityIds?: string[]): Promise<Listing[]> { 
     return this.listings.filter(l => 
@@ -261,12 +296,44 @@ class DbService {
 
   async getModerationTickets(cityIds?: string[]): Promise<SupportTicket[]> {
     if (!cityIds) return this.tickets.filter(t => t.status === 'OPEN');
-    // For performance, create a fast lookup of user city
     const userCityMap = new Map(this.users.map(u => [u.id, u.cityId]));
     return this.tickets.filter(t => 
       t.status === 'OPEN' && 
       cityIds.includes(userCityMap.get(t.userId) || '')
     );
+  }
+
+  async createAdReport(data: Partial<AdReport>): Promise<AdReport> {
+    const report: AdReport = {
+      id: 'rep' + Date.now(),
+      listingId: data.listingId!,
+      listingTitle: data.listingTitle!,
+      reporterId: data.reporterId!,
+      reporterName: data.reporterName!,
+      cityId: data.cityId!,
+      reason: data.reason || 'OTHER',
+      details: data.details || '',
+      status: 'PENDING',
+      createdAt: new Date().toISOString()
+    };
+    this.reports.unshift(report);
+    this.persist();
+    return report;
+  }
+
+  async getModerationReports(cityIds?: string[]): Promise<AdReport[]> {
+    return this.reports.filter(r => 
+      r.status === 'PENDING' && 
+      (!cityIds || cityIds.includes(r.cityId))
+    );
+  }
+
+  async resolveAdReport(reportId: string, action: 'RESOLVED' | 'DISMISSED'): Promise<void> {
+    const idx = this.reports.findIndex(r => r.id === reportId);
+    if (idx !== -1) {
+      this.reports[idx].status = action;
+      this.persist();
+    }
   }
 
   async resolveTicket(ticketId: string): Promise<void> {
