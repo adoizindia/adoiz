@@ -80,7 +80,6 @@ export const AdminPanel: React.FC<{
   const [planForm, setPlanForm] = useState<Partial<SubscriptionPlan>>({ name: '', price: 0, durationDays: 30, features: [] });
   const [newFeature, setNewFeature] = useState('');
 
-  // Added missing helper to resolve "Cannot find name 'getCityName'" error
   const getCityName = (id: string) => CITIES.find(c => c.id === id)?.name || id;
 
   // Initial Load
@@ -155,6 +154,8 @@ export const AdminPanel: React.FC<{
     setIsProcessing(true);
     try {
       await dbService.updateSystemConfig(config);
+      // Sync localStorage to ensure index.html's manifest script sees changes immediately on next reload
+      localStorage.setItem('adoiz_config', JSON.stringify(config));
       notify("Platform settings updated successfully.", "success");
     } catch (err: any) {
       notify(err.message, "error");
@@ -205,7 +206,6 @@ export const AdminPanel: React.FC<{
     }
   };
 
-  // User Identity Update Handler
   const handleUserIdentityUpdate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!detailUser) return;
@@ -232,7 +232,6 @@ export const AdminPanel: React.FC<{
     setUserEditForm({ ...userEditForm, managedCityIds: updated });
   };
 
-  // Inventory Management Handlers
   const handleListingStatusUpdate = async (id: string, status: ListingStatus) => {
     setIsProcessing(true);
     try {
@@ -280,7 +279,6 @@ export const AdminPanel: React.FC<{
     }
   };
 
-  // GEO & CATS Handlers
   const handleAddGeo = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsProcessing(true);
@@ -320,12 +318,11 @@ export const AdminPanel: React.FC<{
         { id: 'banner_ads', label: 'Banners' },
         { id: 'adsense', label: 'External Ads' }
       ];
-      case 'SYSTEM': return [{ id: 'branding', label: 'Design & Text' }, { id: 'logs', label: 'Activity Logs' }];
+      case 'SYSTEM': return [{ id: 'branding', label: 'Branding' }, { id: 'logs', label: 'Activity Logs' }];
       default: return [];
     }
   }
 
-  // Filtered Cities logic for horizontal Geo view
   const filteredCitiesList = useMemo(() => {
     return cities.filter(city => {
       const state = states.find(s => s.id === city.stateId);
@@ -344,7 +341,6 @@ export const AdminPanel: React.FC<{
     return states.filter(s => s.countryId === geoFilterCountry);
   }, [states, geoFilterCountry]);
 
-  // Admin Module: Dashboard Overview
   const renderDashboard = () => {
     const stats = [
       { label: 'Total Users', value: users.length, icon: 'fa-users', color: 'bg-blue-500' },
@@ -390,7 +386,6 @@ export const AdminPanel: React.FC<{
     );
   };
 
-  // Admin Module: Master Inventory Control
   const renderInventory = () => {
     let filtered = listings.filter(l => l.title.toLowerCase().includes(searchQuery.toLowerCase()) || l.id.toLowerCase().includes(searchQuery.toLowerCase()));
     if (inventoryStatusFilter !== 'ALL') {
@@ -468,7 +463,6 @@ export const AdminPanel: React.FC<{
     );
   };
 
-  // Admin Module: Ad Management Detail View
   const renderAdManagement = () => {
     if (!detailListing) return <div className="py-20 text-center"><i className="fas fa-circle-notch fa-spin text-4xl text-blue-600"></i></div>;
     
@@ -573,7 +567,6 @@ export const AdminPanel: React.FC<{
     );
   };
 
-  // Admin Module: Geo Nodes & Taxonomies
   const renderGeoCats = () => {
     if (activeTab === 'locations') {
       return (
@@ -582,7 +575,6 @@ export const AdminPanel: React.FC<{
               <div className="p-8 border-b border-gray-50 bg-gray-50/30 flex flex-col gap-6">
                  <h3 className="text-xl font-black uppercase text-gray-900 tracking-tight">Saved Locations</h3>
                  
-                 {/* New Filters Row (Horizontal Shift) */}
                  <div className="flex flex-col md:flex-row gap-4 items-end">
                     <div className="flex-1 w-full space-y-1.5">
                        <label className="text-[9px] font-black uppercase text-gray-400 ml-1 tracking-widest">Search City</label>
@@ -623,7 +615,6 @@ export const AdminPanel: React.FC<{
                  </div>
               </div>
               
-              {/* Horizontal Table for Locations */}
               <div className="flex-1 overflow-x-auto">
                  <table className="w-full text-left min-w-[600px]">
                     <thead>
@@ -739,7 +730,6 @@ export const AdminPanel: React.FC<{
     return null;
   };
 
-  // Admin Module: User Registry
   const renderUsers = () => {
     const filtered = users.filter(u => u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.email.toLowerCase().includes(searchQuery.toLowerCase()));
     
@@ -793,7 +783,6 @@ export const AdminPanel: React.FC<{
     );
   };
 
-  // Admin Module: User Detail Management
   const renderUserDetail = () => {
     if (!detailUser) return <div className="py-20 text-center"><i className="fas fa-circle-notch fa-spin text-4xl text-blue-600"></i></div>;
     
@@ -858,6 +847,30 @@ export const AdminPanel: React.FC<{
                            <label className="text-[9px] font-black uppercase text-gray-400 ml-1">WhatsApp Interface</label>
                            <input type="text" className="w-full bg-gray-50 border p-4 rounded-xl text-sm font-bold" value={userEditForm.whatsapp || ''} onChange={e => setUserEditForm({...userEditForm, whatsapp: e.target.value})} />
                         </div>
+                        
+                        {/* New Location Fields */}
+                        <div className="space-y-2">
+                           <label className="text-[9px] font-black uppercase text-gray-400 ml-1">Country</label>
+                           <select className="w-full bg-gray-50 border p-4 rounded-xl text-xs font-bold" value={userEditForm.countryId || ''} onChange={e => setUserEditForm({...userEditForm, countryId: e.target.value, stateId: '', cityId: ''})}>
+                              <option value="">Select Country</option>
+                              {countries.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                           </select>
+                        </div>
+                        <div className="space-y-2">
+                           <label className="text-[9px] font-black uppercase text-gray-400 ml-1">State</label>
+                           <select className="w-full bg-gray-50 border p-4 rounded-xl text-xs font-bold" value={userEditForm.stateId || ''} onChange={e => setUserEditForm({...userEditForm, stateId: e.target.value, cityId: ''})}>
+                              <option value="">Select State</option>
+                              {states.filter(s => !userEditForm.countryId || s.countryId === userEditForm.countryId).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                           </select>
+                        </div>
+                        <div className="space-y-2">
+                           <label className="text-[9px] font-black uppercase text-gray-400 ml-1">City</label>
+                           <select className="w-full bg-gray-50 border p-4 rounded-xl text-xs font-bold" value={userEditForm.cityId || ''} onChange={e => setUserEditForm({...userEditForm, cityId: e.target.value})}>
+                              <option value="">Select City</option>
+                              {cities.filter(c => !userEditForm.stateId || c.stateId === userEditForm.stateId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                           </select>
+                        </div>
+
                         <div className="col-span-2 space-y-2">
                            <label className="text-[9px] font-black uppercase text-gray-400 ml-1">Physical Address / HQ</label>
                            <textarea className="w-full bg-gray-50 border p-4 rounded-xl text-sm font-bold h-24" value={userEditForm.address || ''} onChange={e => setUserEditForm({...userEditForm, address: e.target.value})} />
@@ -1138,7 +1151,6 @@ export const AdminPanel: React.FC<{
               <div className="space-y-2">
                 <label className="text-[10px] font-black uppercase text-gray-400 ml-1 flex items-center gap-2">
                   AdSense Code Snippet / ID
-                  <i className="fas fa-circle-info text-blue-500 cursor-help" title="Paste your Google AdSense script or auto-ads code here."></i>
                 </label>
                 <textarea 
                   className="w-full bg-gray-50 border border-gray-100 p-6 rounded-[2rem] font-mono text-xs font-bold h-64 outline-none focus:ring-4 focus:ring-amber-500/5 focus:bg-white focus:border-amber-500 transition-all"
@@ -1146,16 +1158,6 @@ export const AdminPanel: React.FC<{
                   value={config.googleAdsenseCode}
                   onChange={e => setConfig({...config, googleAdsenseCode: e.target.value})}
                 />
-              </div>
-              
-              <div className="bg-amber-50 p-6 rounded-2xl border border-amber-100 flex items-start gap-4">
-                <i className="fas fa-lightbulb text-amber-600 mt-1"></i>
-                <div className="space-y-1">
-                  <p className="text-[10px] font-black text-amber-900 uppercase">Pro Tip</p>
-                  <p className="text-xs text-amber-800 font-medium leading-relaxed">
-                    Make sure to include the full script provided by Google. These ads will typically appear in dedicated slots on the product listing and search result pages.
-                  </p>
-                </div>
               </div>
             </div>
 
@@ -1172,6 +1174,160 @@ export const AdminPanel: React.FC<{
           </div>
         </div>
       );
+    }
+    return null;
+  };
+
+  const renderSystem = () => {
+    if (activeTab === 'branding') {
+      return (
+        <div className="max-w-4xl space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-12">
+            <div>
+              <h3 className="text-xl font-black uppercase text-gray-900 tracking-tight mb-8">Platform Branding</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Website Name</label>
+                  <input 
+                    type="text" 
+                    className="w-full bg-gray-50 border border-gray-100 p-5 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all" 
+                    value={config.siteName} 
+                    onChange={e => setConfig({...config, siteName: e.target.value})} 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Site Tagline</label>
+                  <input 
+                    type="text" 
+                    className="w-full bg-gray-50 border border-gray-100 p-5 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all" 
+                    value={config.branding.siteTagline} 
+                    onChange={e => setConfig({...config, branding: {...config.branding, siteTagline: e.target.value}})} 
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-10 border-t border-gray-50">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center text-lg shadow-sm">
+                  <i className="fas fa-mobile-screen-button"></i>
+                </div>
+                <h3 className="text-xl font-black uppercase text-gray-900 tracking-tight">PWA Configuration</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">App Install Name</label>
+                  <input 
+                    type="text" 
+                    className="w-full bg-gray-50 border border-gray-100 p-5 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all" 
+                    placeholder="Short name for PWA"
+                    value={config.branding.appName || ''} 
+                    onChange={e => setConfig({...config, branding: {...config.branding, appName: e.target.value}})} 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Theme / Status Color</label>
+                  <div className="flex gap-4">
+                    <input 
+                      type="color" 
+                      className="w-16 h-16 rounded-2xl border-4 border-white shadow-sm cursor-pointer"
+                      value={config.branding.statusColor || '#1a73e8'} 
+                      onChange={e => setConfig({...config, branding: {...config.branding, statusColor: e.target.value}})} 
+                    />
+                    <input 
+                      type="text" 
+                      className="flex-1 bg-gray-50 border border-gray-100 p-5 rounded-2xl font-mono font-bold outline-none focus:bg-white focus:border-blue-500 transition-all uppercase"
+                      value={config.branding.statusColor || '#1a73e8'} 
+                      onChange={e => setConfig({...config, branding: {...config.branding, statusColor: e.target.value}})} 
+                    />
+                  </div>
+                </div>
+                <div className="col-span-1 md:col-span-2 space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">PWA Icon URL (192x192 PNG)</label>
+                  <div className="flex gap-6 items-center">
+                    <div className="w-16 h-16 bg-white border border-gray-100 rounded-2xl overflow-hidden flex-shrink-0 shadow-sm">
+                       <img src={config.branding.pwaIcon || 'https://picsum.photos/seed/adoiz/192'} className="w-full h-full object-cover" />
+                    </div>
+                    <input 
+                      type="url" 
+                      className="flex-1 bg-gray-50 border border-gray-100 p-5 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all" 
+                      placeholder="https://example.com/icon.png"
+                      value={config.branding.pwaIcon || ''} 
+                      onChange={e => setConfig({...config, branding: {...config.branding, pwaIcon: e.target.value}})} 
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-10 border-t border-gray-50">
+              <div className="flex items-center justify-between p-6 bg-gray-50 rounded-[2rem] border border-gray-100">
+                <div>
+                  <h4 className="text-sm font-black text-gray-900 uppercase tracking-tight">Maintenance Mode</h4>
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mt-1">Disable front-end access for users</p>
+                </div>
+                <button 
+                  onClick={() => setConfig({...config, maintenanceMode: !config.maintenanceMode})}
+                  className={`w-16 h-8 rounded-full transition-all relative ${config.maintenanceMode ? 'bg-rose-500' : 'bg-gray-300'}`}
+                >
+                  <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${config.maintenanceMode ? 'left-9' : 'left-1'}`}></div>
+                </button>
+              </div>
+            </div>
+
+            <div className="pt-4">
+              <button 
+                onClick={handleConfigCommit} 
+                disabled={isProcessing} 
+                className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl hover:bg-black transition-all flex items-center justify-center gap-3"
+              >
+                {isProcessing ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-save"></i>}
+                Save Branding & PWA Settings
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (activeTab === 'logs') {
+       return (
+         <div className="bg-white rounded-[3rem] border border-gray-100 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <div className="p-8 border-b border-gray-50 bg-gray-50/30 flex justify-between items-center">
+               <h3 className="text-xl font-black uppercase text-gray-900 tracking-tight">System Activity Logs</h3>
+               <button onClick={loadData} className="text-blue-600 font-black text-[10px] uppercase tracking-widest"><i className="fas fa-rotate mr-1"></i> Refresh</button>
+            </div>
+            <div className="overflow-x-auto">
+               <table className="w-full text-left">
+                  <thead>
+                     <tr className="text-[10px] font-black uppercase text-gray-400 border-b border-gray-50 bg-gray-50/20">
+                        <th className="px-10 py-5">Timestamp</th>
+                        <th className="px-10 py-5">Action</th>
+                        <th className="px-10 py-5">Severity</th>
+                        <th className="px-10 py-5">Details</th>
+                     </tr>
+                  </thead>
+                  <tbody className="divide-y divide-gray-50">
+                     {logs.map(log => (
+                        <tr key={log.id} className="hover:bg-gray-50 transition-colors text-xs">
+                           <td className="px-10 py-5 text-gray-400 font-medium whitespace-nowrap">{new Date(log.timestamp).toLocaleString()}</td>
+                           <td className="px-10 py-5 font-bold text-gray-900">{log.action}</td>
+                           <td className="px-10 py-5">
+                              <span className={`px-2.5 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest ${
+                                log.severity === 'CRITICAL' ? 'bg-rose-100 text-rose-600' : 
+                                log.severity === 'HIGH' ? 'bg-orange-100 text-orange-600' : 'bg-blue-100 text-blue-600'
+                              }`}>
+                                 {log.severity}
+                              </span>
+                           </td>
+                           <td className="px-10 py-5 text-gray-500 italic max-w-xs truncate">{log.details}</td>
+                        </tr>
+                     ))}
+                  </tbody>
+               </table>
+            </div>
+         </div>
+       );
     }
     return null;
   };
@@ -1226,6 +1382,7 @@ export const AdminPanel: React.FC<{
                   {activeMenu === 'USERS' && renderUsers()}
                   {activeMenu === 'LISTINGS' && renderInventory()}
                   {activeMenu === 'GEO_CATS' && renderGeoCats()}
+                  {activeMenu === 'SYSTEM' && renderSystem()}
                </div>
             </>
          )}

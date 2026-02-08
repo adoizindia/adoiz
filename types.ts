@@ -128,6 +128,7 @@ export interface User {
   role: UserRole;
   cityId?: string;
   stateId?: string;
+  countryId?: string;
   mobile?: string;
   whatsapp?: string;
   address?: string;
