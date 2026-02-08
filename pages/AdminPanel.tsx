@@ -85,6 +85,11 @@ export const AdminPanel: React.FC<{
   // Resource Link Form State
   const [newResource, setNewResource] = useState({ label: '', url: '', content: '' });
 
+  // Cleanup States
+  const [cleanupMonths, setCleanupMonths] = useState<number>(3);
+  const [cleanupCityId, setCleanupCityId] = useState<string>('ALL');
+  const [cleanupUserType, setCleanupUserType] = useState<'ALL' | 'VERIFIED' | 'PROFESSIONAL'>('ALL');
+
   useEffect(() => {
     loadData();
     setActiveTab(getTabsForMenu(activeMenu)[0].id);
@@ -474,11 +479,54 @@ export const AdminPanel: React.FC<{
       case 'SYSTEM': return [
         { id: 'site', label: 'Site Branding' },
         { id: 'gateways_sys', label: 'Communication' },
+        { id: 'cleanup', label: 'Cleanup' },
         { id: 'logs', label: 'Security Logs' }
       ];
       default: return [{ id: 'default', label: 'Management' }];
     }
   }
+
+  const filteredCleanupAds = useMemo(() => {
+    const cutoffDate = new Date();
+    cutoffDate.setMonth(cutoffDate.getMonth() - cleanupMonths);
+
+    return listings.filter(l => {
+      const listingDate = new Date(l.createdAt);
+      const seller = users.find(u => u.id === l.sellerId);
+      
+      const matchesTime = listingDate < cutoffDate;
+      const matchesCity = cleanupCityId === 'ALL' || l.cityId === cleanupCityId;
+      
+      let matchesUser = true;
+      if (cleanupUserType === 'VERIFIED') {
+        matchesUser = !!seller?.isVerified;
+      } else if (cleanupUserType === 'PROFESSIONAL') {
+        matchesUser = seller?.role === UserRole.ADMIN || seller?.role === UserRole.MODERATOR;
+      }
+
+      return matchesTime && matchesCity && matchesUser;
+    });
+  }, [listings, cleanupMonths, cleanupCityId, cleanupUserType, users]);
+
+  const handleExecuteCleanup = async () => {
+    if (filteredCleanupAds.length === 0) return;
+    if (!window.confirm(`Are you sure you want to permanently delete ${filteredCleanupAds.length} listings from the system? This action is irreversible.`)) return;
+
+    setIsProcessing(true);
+    try {
+        let count = 0;
+        for (const ad of filteredCleanupAds) {
+            await dbService.deleteListing(ad.id);
+            count++;
+        }
+        notify(`${count} listings purged successfully.`, "success");
+        loadData();
+    } catch (err: any) {
+        notify(err.message, "error");
+    } finally {
+        setIsProcessing(false);
+    }
+  };
 
   const renderDashboard = () => {
     const stats = [
@@ -1508,6 +1556,34 @@ export const AdminPanel: React.FC<{
         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
              <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-8">
+                <div className="flex items-center justify-between border-b border-gray-50 pb-6">
+                  <div>
+                    <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-500">Platform Availability</h4>
+                    <p className="text-[9px] font-bold text-gray-400 mt-1 uppercase">Control global access to marketplace nodes</p>
+                  </div>
+                  <button 
+                    onClick={() => setConfig({ ...config, maintenanceMode: !config.maintenanceMode })}
+                    className={`w-14 h-7 rounded-full relative transition-all duration-300 ${config.maintenanceMode ? 'bg-rose-600' : 'bg-emerald-500'}`}
+                  >
+                    <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all duration-300 shadow-sm ${config.maintenanceMode ? 'left-8' : 'left-1'}`}></div>
+                  </button>
+                </div>
+                <div className="flex items-center gap-4 bg-gray-50 p-6 rounded-[2rem] border border-gray-100">
+                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg ${config.maintenanceMode ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>
+                    <i className={`fas ${config.maintenanceMode ? 'fa-lock' : 'fa-globe'}`}></i>
+                  </div>
+                  <div>
+                    <p className="text-[10px] font-black text-gray-900 uppercase">System State: {config.maintenanceMode ? 'Locked' : 'Operational'}</p>
+                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-tight leading-relaxed">
+                        {config.maintenanceMode 
+                          ? 'Platform is currently restricted to Admin users only. Standard entities see a maintenance notice.' 
+                          : 'Marketplace is live and accessible to all global traffic segments.'}
+                    </p>
+                  </div>
+                </div>
+
+                <div className="h-px bg-gray-50 my-2"></div>
+
                 <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-500">Master Brand Identity</h4>
                 <div className="space-y-4">
                    <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400 ml-1">Platform ID</label><input type="text" className="w-full bg-gray-50 border border-gray-200 p-4 rounded-2xl font-bold" value={config.siteName} onChange={e => setConfig({...config, siteName: e.target.value})} /></div>
@@ -1714,6 +1790,90 @@ export const AdminPanel: React.FC<{
           </div>
         </div>
       );
+    }
+    if (activeTab === 'cleanup') {
+        return (
+            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 pb-20">
+                <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-10">
+                    <div className="flex justify-between items-center border-b border-gray-50 pb-6">
+                        <div>
+                            <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-500">Platform Data Cleanup</h4>
+                            <p className="text-[9px] font-bold text-gray-400 mt-1 uppercase">Permanently remove legacy inventory assets</p>
+                        </div>
+                        <div className="w-12 h-12 bg-rose-50 rounded-2xl flex items-center justify-center text-rose-500">
+                            <i className="fas fa-broom text-xl"></i>
+                        </div>
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Legacy Duration</label>
+                            <select 
+                                className="w-full bg-gray-50 border border-gray-200 p-4 rounded-2xl font-bold text-sm outline-none focus:bg-white transition-all"
+                                value={cleanupMonths}
+                                onChange={e => setCleanupMonths(Number(e.target.value))}
+                            >
+                                <option value={1}>Older than 1 Month</option>
+                                <option value={3}>Older than 3 Months</option>
+                                <option value={6}>Older than 6 Months</option>
+                                <option value={12}>Older than 1 Year</option>
+                            </select>
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Target City Node</label>
+                            <select 
+                                className="w-full bg-gray-50 border border-gray-200 p-4 rounded-2xl font-bold text-sm outline-none focus:bg-white transition-all"
+                                value={cleanupCityId}
+                                onChange={e => setCleanupCityId(e.target.value)}
+                            >
+                                <option value="ALL">All Cities (Global)</option>
+                                {cities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                        </div>
+
+                        <div className="space-y-1">
+                            <label className="text-[10px] font-black uppercase text-gray-400 ml-1">User Protocol Filter</label>
+                            <select 
+                                className="w-full bg-gray-50 border border-gray-200 p-4 rounded-2xl font-bold text-sm outline-none focus:bg-white transition-all"
+                                value={cleanupUserType}
+                                onChange={e => setCleanupUserType(e.target.value as any)}
+                            >
+                                <option value="ALL">All Entities</option>
+                                <option value="VERIFIED">Verified Entities Only</option>
+                                <option value="PROFESSIONAL">Professional Roles Only</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="bg-slate-900 p-10 rounded-[2.5rem] relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8">
+                        <div className="absolute top-0 left-0 w-full h-full bg-blue-500/5 pointer-events-none"></div>
+                        <div className="relative z-10 text-center md:text-left">
+                            <h5 className="text-3xl font-black text-white">{filteredCleanupAds.length}</h5>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Target Legacy Assets Identified</p>
+                        </div>
+                        <button 
+                            onClick={handleExecuteCleanup}
+                            disabled={isProcessing || filteredCleanupAds.length === 0}
+                            className="relative z-10 w-full md:w-auto bg-rose-600 text-white px-12 py-5 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-2xl shadow-rose-900/20 hover:bg-rose-500 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-3 active:scale-[0.98]"
+                        >
+                            {isProcessing ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-trash-alt"></i>}
+                            Execute System Purge
+                        </button>
+                    </div>
+
+                    <div className="bg-amber-50 border border-amber-100 p-6 rounded-[2rem] flex gap-4">
+                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-amber-500 shadow-sm flex-shrink-0">
+                            <i className="fas fa-exclamation-triangle"></i>
+                        </div>
+                        <div>
+                            <p className="text-[10px] font-black text-amber-900 uppercase">Warning: Permanent Action</p>
+                            <p className="text-[9px] text-amber-700/70 mt-1 leading-relaxed">Executing cleanup will permanently remove image assets and marketplace history for selected items. Use with caution for data integrity.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        );
     }
     if (activeTab === 'logs') {
       return (
