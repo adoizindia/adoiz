@@ -105,6 +105,7 @@ export const AdminPanel: React.FC<{
   useEffect(() => {
     loadData();
     setActiveTab(getTabsForMenu(activeMenu)[0].id);
+    setSearchQuery(''); // Clear search when switching top level modules
   }, [activeMenu]);
 
   useEffect(() => {
@@ -302,7 +303,7 @@ export const AdminPanel: React.FC<{
         user.id
       );
       setDetailUser(updated);
-      setWalletForm({ amount: '', type: 'CREDIT', reason: '' });
+      setWalletForm({ amount: '', type: 'CREDIT' as any, reason: '' });
       await loadUserDetails(detailUser.id);
       notify(`${walletForm.type} operation successful.`, "success");
     } catch (err: any) {
@@ -387,7 +388,7 @@ export const AdminPanel: React.FC<{
       setCityTiers(updatedTiers);
       dbService.updateSystemConfig({ cityTierMapping: updatedTiers });
       
-      setCityAddForm({ name: '', countryId: '', stateId: '', tier: 'T2' });
+      setCityAddForm({ name: '', countryId: '', stateId: '', tier: 'T2' as any });
       setFormStates([]);
       notify(`City ${newCity.name} added successfully.`, "success");
       loadData();
@@ -952,12 +953,23 @@ export const AdminPanel: React.FC<{
           const matchStatus = listingFilterStatus === 'ALL' || l.status === listingFilterStatus;
           const matchCat = listingFilterCategory === 'ALL' || l.category === listingFilterCategory;
           const matchTab = activeTab === 'pending' ? (l.status === 'PENDING' || l.status === 'EDIT_PENDING') : true;
-          return matchStatus && matchCat && matchTab;
+          const matchSearch = l.title.toLowerCase().includes(searchQuery.toLowerCase()) || l.id.toLowerCase().includes(searchQuery.toLowerCase());
+          return matchStatus && matchCat && matchTab && matchSearch;
       });
 
       return (
           <div className="space-y-6">
-              <div className="flex gap-4 bg-white p-4 rounded-[2rem] border border-gray-100 shadow-sm">
+              <div className="flex flex-wrap gap-4 bg-white p-4 rounded-[2rem] border border-gray-100 shadow-sm items-center">
+                  <div className="flex-1 min-w-[200px] relative">
+                      <i className="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-gray-400 text-xs"></i>
+                      <input 
+                        type="text" 
+                        placeholder="Search inventory by title or ID..." 
+                        className="w-full bg-gray-50 border border-gray-100 rounded-xl pl-10 pr-4 py-2 text-[10px] font-black uppercase outline-none focus:bg-white transition-all"
+                        value={searchQuery}
+                        onChange={e => setSearchQuery(e.target.value)}
+                      />
+                  </div>
                   <select className="bg-gray-50 border border-gray-100 rounded-xl text-[10px] font-black uppercase px-4 py-2 outline-none" value={listingFilterCategory} onChange={e => setListingFilterCategory(e.target.value)}>
                       <option value="ALL">All Categories</option>
                       {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
