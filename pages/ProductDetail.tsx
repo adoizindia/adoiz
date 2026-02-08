@@ -1,6 +1,5 @@
-
 import React, { useState, useEffect } from 'react';
-import { Listing, User, BannerAd, AdReport } from '../types';
+import { Listing, User, BannerAd, AdReport, Rating } from '../types';
 import { dbService } from '../services/dbService';
 import { CITIES } from '../constants';
 
@@ -31,6 +30,7 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
   const [banners, setBanners] = useState<BannerAd[]>([]);
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
+  const [sellerRatings, setSellerRatings] = useState<Rating[]>([]);
 
   // Reporting State
   const [showReportModal, setShowReportModal] = useState(false);
@@ -40,16 +40,23 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
   });
   const [isReporting, setIsReporting] = useState(false);
 
+  // Rating State
+  const [showRatingModal, setShowRatingModal] = useState(false);
+  const [ratingScore, setRatingScore] = useState(5);
+  const [ratingComment, setRatingComment] = useState('');
+  const [isSubmittingRating, setIsSubmittingRating] = useState(false);
+
   useEffect(() => {
     dbService.getListingsByCity(listing.cityId).then(all => {
       const filtered = all.filter(l => l.id !== listing.id).slice(0, 4);
       setRelatedListings(filtered);
     });
     dbService.getActiveBanners(listing.cityId).then(setBanners);
+    dbService.getRatingsForUser(seller.id).then(setSellerRatings);
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setActiveImageIndex(0);
     setCurrentBannerIndex(0);
-  }, [listing.id, listing.cityId]);
+  }, [listing.id, listing.cityId, seller.id]);
 
   useEffect(() => {
     if (banners.length <= 1) return;
@@ -94,6 +101,25 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
     }
   };
 
+  const handleRatingSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user) return;
+    setIsSubmittingRating(true);
+    try {
+      await dbService.submitRating(user, seller.id, ratingScore, ratingComment);
+      notify("Thank you for your feedback!", "success");
+      setShowRatingModal(false);
+      setRatingComment('');
+      // Refresh seller ratings
+      const updatedRatings = await dbService.getRatingsForUser(seller.id);
+      setSellerRatings(updatedRatings);
+    } catch (err: any) {
+      notify(err.message, "error");
+    } finally {
+      setIsSubmittingRating(false);
+    }
+  };
+
   const getFormattedCity = (cityId: string) => {
     const city = CITIES.find(c => c.id === cityId);
     return city ? `${city.name} - ${cityId}` : cityId;
@@ -101,6 +127,12 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
 
   const nextImage = () => setActiveImageIndex((prev) => (prev + 1) % listing.images.length);
   const prevImage = () => setActiveImageIndex((prev) => (prev - 1 + listing.images.length) % listing.images.length);
+
+  const renderStars = (score: number) => {
+    return [...Array(5)].map((_, i) => (
+      <i key={i} className={`fas fa-star ${i < Math.floor(score) ? 'text-yellow-400' : 'text-gray-200'}`}></i>
+    ));
+  };
 
   return (
     <div className="max-w-7xl mx-auto p-0">
@@ -176,7 +208,22 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
               <div>
                 <h4 className="font-black text-xl text-gray-900 leading-none">{seller.name}</h4>
                 <p className="text-[10px] font-black text-blue-500 uppercase tracking-widest mt-2">{seller.isVerified ? 'Verified Professional' : 'Verified Seller'}</p>
-                <div className="flex items-center text-yellow-400 text-[10px] mt-2 space-x-1"><i className="fas fa-star"></i><i className="fas fa-star"></i><i className="fas fa-star"></i><i className="fas fa-star"></i><i className="fas fa-star text-gray-200"></i><span className="ml-2 text-gray-400 font-bold uppercase tracking-tighter">4.0 (12)</span></div>
+                <div className="flex items-center mt-2 space-x-1">
+                  <div className="flex text-yellow-400 text-[10px]">
+                    {renderStars(seller.averageRating || 0)}
+                  </div>
+                  <span className="ml-2 text-gray-400 font-bold uppercase tracking-tighter text-[9px]">
+                    {seller.averageRating || 0} ({seller.ratingCount || 0})
+                  </span>
+                </div>
+                {user && user.id !== seller.id && (
+                  <button 
+                    onClick={() => setShowRatingModal(true)}
+                    className="mt-2 text-blue-600 hover:text-blue-700 text-[9px] font-black uppercase tracking-widest underline decoration-2 underline-offset-4"
+                  >
+                    Rate Seller
+                  </button>
+                )}
               </div>
             </div>
             <div className="grid grid-cols-3 gap-2">
@@ -195,6 +242,74 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
         </div>
       </div>
 
+      {/* Seller Ratings Section */}
+      {sellerRatings.length > 0 && (
+        <div className="mb-12 bg-white p-10 rounded-[3rem] border border-gray-100">
+          <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight mb-8">Seller Feedback</h3>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {sellerRatings.slice(0, 4).map(rating => (
+              <div key={rating.id} className="p-6 bg-gray-50 rounded-2xl border border-gray-100">
+                <div className="flex justify-between items-start mb-4">
+                  <div>
+                    <p className="text-xs font-black text-gray-900 uppercase">{rating.fromUserName}</p>
+                    <p className="text-[8px] font-bold text-gray-400 uppercase mt-1">{new Date(rating.timestamp).toLocaleDateString()}</p>
+                  </div>
+                  <div className="flex text-yellow-400 text-[10px]">
+                    {renderStars(rating.score)}
+                  </div>
+                </div>
+                <p className="text-sm text-gray-600 italic">"{rating.comment}"</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Rating Submission Modal */}
+      {showRatingModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in">
+           <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95">
+              <div className="bg-blue-600 p-8 text-white text-center">
+                <h3 className="text-2xl font-black">Rate Seller</h3>
+                <p className="text-blue-100 text-xs mt-1">Help others by sharing your experience</p>
+              </div>
+              <form onSubmit={handleRatingSubmit} className="p-10 space-y-6">
+                 <div className="space-y-4">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center block">Star Rating</label>
+                    <div className="flex justify-center gap-2 text-2xl">
+                      {[1, 2, 3, 4, 5].map(star => (
+                        <button 
+                          key={star} 
+                          type="button" 
+                          onClick={() => setRatingScore(star)}
+                          className={`transition-transform hover:scale-110 active:scale-95 ${star <= ratingScore ? 'text-yellow-400' : 'text-gray-200'}`}
+                        >
+                          <i className="fas fa-star"></i>
+                        </button>
+                      ))}
+                    </div>
+                 </div>
+                 <div className="space-y-1">
+                    <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Share Your Thoughts</label>
+                    <textarea 
+                      required 
+                      rows={4} 
+                      className="w-full bg-gray-50 border border-gray-100 p-6 rounded-2xl text-sm font-bold outline-none focus:bg-white transition-all" 
+                      value={ratingComment} 
+                      onChange={e => setRatingComment(e.target.value)} 
+                      placeholder="Excellent seller, highly recommended..." 
+                    />
+                 </div>
+                 <button type="submit" disabled={isSubmittingRating} className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all flex items-center justify-center gap-2 active:scale-95">
+                    {isSubmittingRating ? <i className="fas fa-circle-notch fa-spin"></i> : 'Submit Feedback'}
+                 </button>
+                 <button type="button" onClick={() => setShowRatingModal(false)} className="w-full py-4 text-gray-400 font-black uppercase text-[10px] tracking-widest">Cancel</button>
+              </form>
+           </div>
+        </div>
+      )}
+
+      {/* Existing Banner and Related Listings code below remains exactly the same */}
       {banners.length > 0 && (
         <div className="mb-6 relative group">
            <div className="relative w-full rounded-2xl md:rounded-[2rem] overflow-hidden shadow-sm border border-gray-100 bg-white p-2">
@@ -237,7 +352,7 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
            <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95">
               <div className="bg-rose-600 p-8 text-white text-center">
                 <h3 className="text-2xl font-black">Report Ad</h3>
-                <p className="text-rose-100 text-xs mt-1">Help us keep ADOIZ safe</p>
+                <p className="text-rose-100 text-xs mt-1">Help us keep adoiz safe</p>
               </div>
               <form onSubmit={handleReportSubmit} className="p-10 space-y-6">
                  <div className="space-y-1">

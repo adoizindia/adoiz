@@ -82,6 +82,16 @@ export interface BackupArchive {
   errorMessage?: string;
 }
 
+export interface Rating {
+  id: string;
+  fromUserId: string;
+  fromUserName: string;
+  toUserId: string;
+  score: number;
+  comment: string;
+  timestamp: string;
+}
+
 export interface SystemConfig {
   siteName: string;
   logoUrl: string;
@@ -145,7 +155,8 @@ export interface SystemConfig {
       twitter: string;
       linkedin: string;
       youtube: string;
-    }
+    };
+    resourceLinks: Array<{ label: string; url: string; content?: string }>;
   };
   socialLogin: {
     googleClientId: string;
@@ -206,6 +217,8 @@ export interface User {
   isVerified?: boolean;
   blueTickUntil?: string;
   socialProvider?: 'email' | 'google' | 'facebook';
+  averageRating?: number;
+  ratingCount?: number;
 }
 
 export interface Listing {

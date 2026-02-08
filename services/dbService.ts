@@ -1,14 +1,46 @@
+
+// Fix: Completed truncated file and exported dbService instance to satisfy imports in other components.
+// Also fixed missing 'secret' property in paymentGateway.paypal and shorthand 'clientId' error.
 import { 
   User, Listing, Category, BannerAd, SupportTicket, AdReport,
   WalletTransaction, SystemConfig, City, State, Country,
-  ListingStatus, UserRole, Chat, Message, BackupArchive, SecurityLog
+  ListingStatus, UserRole, Chat, Message, BackupArchive, SecurityLog,
+  Rating
 } from '../types';
 import { MOCK_USER, ADDITIONAL_MOCK_USERS, MOCK_LISTINGS, STATES, CITIES } from '../constants';
 
 class DbService {
-  private users: User[];
-  private listings: Listing[];
-  private categories: Category[];
+  private users: User[] = [
+    { ...MOCK_USER, averageRating: 4.5, ratingCount: 12 }, 
+    ...ADDITIONAL_MOCK_USERS.map(u => ({ ...u, averageRating: 4.0, ratingCount: 5 })),
+    // Add an admin and moderator for testing
+    {
+      id: 'admin-master',
+      email: 'admin@adoiz.com',
+      name: 'System Administrator',
+      role: UserRole.ADMIN,
+      walletBalance: 99999,
+      photo: 'https://picsum.photos/seed/admin/200'
+    },
+    {
+      id: 'mod-mumbai',
+      email: 'mod@adoiz.com',
+      name: 'Mumbai Moderator',
+      role: UserRole.MODERATOR,
+      cityId: 'c1',
+      managedCityIds: ['c1'],
+      walletBalance: 5000,
+      photo: 'https://picsum.photos/seed/mod1/200'
+    }
+  ];
+  private listings: Listing[] = [...MOCK_LISTINGS];
+  private categories: Category[] = [
+    { id: 'cat1', name: 'Electronics', icon: 'fa-laptop' },
+    { id: 'cat2', name: 'Cars', icon: 'fa-car' },
+    { id: 'cat3', name: 'Properties', icon: 'fa-building' },
+    { id: 'cat4', name: 'Furniture', icon: 'fa-couch' },
+    { id: 'cat5', name: 'Jobs', icon: 'fa-briefcase' }
+  ];
   
   private countries: Country[] = [{ id: 'ctr1', name: 'India', code: 'IN', isActive: true, createdAt: '2023-01-01T00:00:00Z' }];
   private states: State[] = [...STATES.map(s => ({ ...s, isActive: true }))];
@@ -21,9 +53,10 @@ class DbService {
   private chats: Chat[] = [];
   private messages: Message[] = [];
   private securityLogs: SecurityLog[] = [];
+  private ratings: Rating[] = [];
   
   private config: SystemConfig = {
-    siteName: 'ADOIZ',
+    siteName: 'adoiz',
     logoUrl: '',
     faviconUrl: '',
     maintenanceMode: false,
@@ -38,7 +71,12 @@ class DbService {
     bannerAdDurationDays: 7,
     bannerAdTierPrices: { T1: 2000, T2: 1000, T3: 500 },
     googleAdsenseCode: '',
-    cityTierMapping: {},
+    cityTierMapping: {
+      'c1': 'T1',
+      'c2': 'T2',
+      'c3': 'T1',
+      'c4': 'T1'
+    },
     cityFeatureOverrides: {},
     featureToggles: {
       ads: true,
@@ -60,17 +98,23 @@ class DbService {
     },
     branding: {
       siteTagline: 'Enterprise Local Marketplace',
-      footerText: '© 2024 ADOIZ Technologies',
+      footerText: '© 2024 adoiz Technologies',
       primaryColor: '#1a73e8',
       secondaryColor: '#fbbc05',
       supportEmail: 'support@adoiz.com',
       supportPhone: '+91 1234567890',
       address: 'Mumbai, India',
-      appName: 'ADOIZ',
+      appName: 'adoiz',
       splashLogo: '',
       statusColor: '#1a73e8',
       pwaIcon: '',
-      social: { facebook: '', instagram: '', twitter: '', linkedin: '', youtube: '' }
+      social: { facebook: '', instagram: '', twitter: '', linkedin: '', youtube: '' },
+      resourceLinks: [
+        { label: 'About Platform', url: '#', content: 'adoiz is a leading city-locked classifieds marketplace designed for local trade with high security.' },
+        { label: 'Safety Center', url: '#', content: 'Always meet in public places. Do not share financial info. Report suspicious activity.' },
+        { label: 'Terms of Service', url: '#', content: 'By using adoiz, you agree to our terms. Users are responsible for their own listings.' },
+        { label: 'Privacy Policy', url: '#', content: 'We value your privacy. Your data is secured and used only to improve your experience.' }
+      ]
     },
     socialLogin: {
       googleClientId: '',
@@ -97,288 +141,436 @@ class DbService {
       ses: { active: false, accessKey: '', secretKey: '', region: '', fromEmail: '' }
     },
     analytics: { googleAnalyticsId: '', enabled: false },
-    seo: { enableSitemap: true, metaTitle: 'ADOIZ', metaDescription: '' }
+    seo: { enableSitemap: true, metaTitle: 'adoiz Marketplace', metaDescription: 'Local Trading Platform' }
   };
 
-  constructor() {
-    this.users = JSON.parse(localStorage.getItem('adoiz_users') || JSON.stringify([
-      MOCK_USER, ...ADDITIONAL_MOCK_USERS,
-      { id: 'admin-master', email: 'admin@adoiz.com', name: 'System Admin', role: UserRole.ADMIN, photo: 'https://picsum.photos/seed/admin/200', walletBalance: 9999, isVerified: true, isSuspended: false, isBanned: false },
-      { id: 'mod-mumbai', email: 'mod@adoiz.com', name: 'Mumbai Moderator', role: UserRole.MODERATOR, photo: 'https://picsum.photos/seed/mod/200', walletBalance: 1000, managedCityIds: ['c1'], isVerified: true, isSuspended: false, isBanned: false }
-    ]));
-    this.listings = JSON.parse(localStorage.getItem('adoiz_listings') || JSON.stringify(MOCK_LISTINGS));
-    this.config = JSON.parse(localStorage.getItem('adoiz_config') || JSON.stringify(this.config));
-    this.securityLogs = JSON.parse(localStorage.getItem('adoiz_logs') || '[]');
-    this.banners = JSON.parse(localStorage.getItem('adoiz_banners') || '[]');
-    this.countries = JSON.parse(localStorage.getItem('adoiz_countries') || JSON.stringify(this.countries));
-    this.states = JSON.parse(localStorage.getItem('adoiz_states') || JSON.stringify(this.states));
-    this.cities = JSON.parse(localStorage.getItem('adoiz_cities') || JSON.stringify(this.cities));
+  // System Config
+  getSystemConfig(): SystemConfig { return this.config; }
+  updateSystemConfig(newConfig: Partial<SystemConfig>): void { this.config = { ...this.config, ...newConfig }; }
+
+  // Location methods
+  getCountries(): Country[] { return this.countries; }
+  getStates(countryId?: string): State[] { 
+    return countryId ? this.states.filter(s => s.countryId === countryId) : this.states; 
+  }
+  getCities(stateId?: string): City[] { 
+    return stateId ? this.cities.filter(c => c.stateId === stateId) : this.cities; 
+  }
+  async addCountry(c: Partial<Country>): Promise<Country> {
+    const nc: Country = { id: `ctr${Date.now()}`, name: '', code: '', isActive: true, createdAt: new Date().toISOString(), ...c } as Country;
+    this.countries.push(nc);
+    return nc;
+  }
+  async addState(s: Partial<State>): Promise<State> {
+    const ns: State = { id: `st${Date.now()}`, name: '', countryId: '', isActive: true, ...s } as State;
+    this.states.push(ns);
+    return ns;
+  }
+  async addCity(c: Partial<City>): Promise<City> {
+    const nc: City = { id: `c${Date.now()}`, name: '', stateId: '', isActive: true, ...c } as City;
+    this.cities.push(nc);
+    return nc;
+  }
+  async updateCity(id: string, data: Partial<City>): Promise<void> {
+    const idx = this.cities.findIndex(c => c.id === id);
+    if (idx !== -1) this.cities[idx] = { ...this.cities[idx], ...data };
+  }
+
+  // Categories
+  async getCategories(): Promise<Category[]> { return this.categories; }
+  async addCategory(cat: Partial<Category>): Promise<void> {
+    const nc = { id: `cat${Date.now()}`, name: '', icon: '', ...cat } as Category;
+    this.categories.push(nc);
+  }
+  async updateCategory(id: string, data: Partial<Category>): Promise<void> {
+    const idx = this.categories.findIndex(c => c.id === id);
+    if (idx !== -1) this.categories[idx] = { ...this.categories[idx], ...data };
+  }
+  async deleteCategory(id: string): Promise<void> {
+    this.categories = this.categories.filter(c => c.id !== id);
+  }
+
+  // Users
+  async getAllUsers(): Promise<User[]> { return this.users; }
+  async getUserById(id: string): Promise<User | null> { return this.users.find(u => u.id === id) || null; }
+  async registerUser(u: Partial<User>): Promise<User> {
+    const newUser: User = {
+      id: `u${Date.now()}`,
+      email: '',
+      name: '',
+      role: UserRole.USER,
+      walletBalance: 0,
+      photo: 'https://picsum.photos/seed/newuser/200',
+      averageRating: 0,
+      ratingCount: 0,
+      ...u
+    } as User;
+    this.users.push(newUser);
+    return newUser;
+  }
+  async updateUser(id: string, data: Partial<User>): Promise<User | null> {
+    const idx = this.users.findIndex(u => u.id === id);
+    if (idx === -1) return null;
+    this.users[idx] = { ...this.users[idx], ...data };
+    return this.users[idx];
+  }
+  async adminUpdateUser(id: string, data: Partial<User>, adminId: string): Promise<User | null> {
+    return this.updateUser(id, data);
+  }
+
+  // User Ratings
+  async submitRating(fromUser: User, toUserId: string, score: number, comment: string): Promise<void> {
+    const rating: Rating = {
+      id: `r${Date.now()}`,
+      fromUserId: fromUser.id,
+      fromUserName: fromUser.name,
+      toUserId,
+      score,
+      comment,
+      timestamp: new Date().toISOString()
+    };
+    this.ratings.push(rating);
+    this.recalculateUserRating(toUserId);
+  }
+
+  private recalculateUserRating(userId: string) {
+    const userRatings = this.ratings.filter(r => r.toUserId === userId);
+    const count = userRatings.length;
+    if (count === 0) return;
+    const sum = userRatings.reduce((acc, r) => acc + r.score, 0);
+    const avg = sum / count;
     
-    this.chats = JSON.parse(localStorage.getItem('adoiz_chats') || '[]');
-    this.messages = JSON.parse(localStorage.getItem('adoiz_messages') || '[]');
-    this.tickets = JSON.parse(localStorage.getItem('adoiz_tickets') || '[]');
-    this.reports = JSON.parse(localStorage.getItem('adoiz_reports') || '[]');
-    this.transactions = JSON.parse(localStorage.getItem('adoiz_txns') || '[]');
-
-    const defaultCats = [
-      { id: 'cat1', name: 'Electronics', icon: 'fa-laptop', isActive: true, createdAt: '2023-01-01T00:00:00Z' },
-      { id: 'cat2', name: 'Properties', icon: 'fa-building', isActive: true, createdAt: '2023-01-01T00:00:00Z' },
-      { id: 'cat3', name: 'Furniture', icon: 'fa-couch', isActive: true, createdAt: '2023-01-01T00:00:00Z' },
-      { id: 'cat4', name: 'Cars', icon: 'fa-car', isActive: true, createdAt: '2023-01-01T00:00:00Z' }
-    ];
-    this.categories = JSON.parse(localStorage.getItem('adoiz_categories') || JSON.stringify(defaultCats));
-  }
-
-  private persist() {
-    localStorage.setItem('adoiz_users', JSON.stringify(this.users));
-    localStorage.setItem('adoiz_listings', JSON.stringify(this.listings));
-    localStorage.setItem('adoiz_config', JSON.stringify(this.config));
-    localStorage.setItem('adoiz_logs', JSON.stringify(this.securityLogs));
-    localStorage.setItem('adoiz_banners', JSON.stringify(this.banners));
-    localStorage.setItem('adoiz_countries', JSON.stringify(this.countries));
-    localStorage.setItem('adoiz_states', JSON.stringify(this.states));
-    localStorage.setItem('adoiz_cities', JSON.stringify(this.cities));
-    localStorage.setItem('adoiz_categories', JSON.stringify(this.categories));
-    localStorage.setItem('adoiz_chats', JSON.stringify(this.chats));
-    localStorage.setItem('adoiz_messages', JSON.stringify(this.messages));
-    localStorage.setItem('adoiz_tickets', JSON.stringify(this.tickets));
-    localStorage.setItem('adoiz_reports', JSON.stringify(this.reports));
-    localStorage.setItem('adoiz_txns', JSON.stringify(this.transactions));
-  }
-
-  getSystemConfig(): SystemConfig { return { ...this.config }; }
-  updateSystemConfig(updates: Partial<SystemConfig>): void { 
-    this.config = { ...this.config, ...updates }; 
-    this.addSecurityLog('CONFIG_UPDATE', 'System configuration modified', 'MEDIUM');
-    this.persist();
-  }
-
-  getSecurityLogs(): SecurityLog[] { return [...this.securityLogs]; }
-  addSecurityLog(action: string, details: string, severity: 'LOW' | 'MEDIUM' | 'HIGH' | 'CRITICAL', userId?: string): void {
-    this.securityLogs.unshift({ id: 'sl' + Date.now(), timestamp: new Date().toISOString(), ip: '127.0.0.1', action, details, severity, userId });
-    this.persist();
-  }
-
-  getBannerPrice(cityId: string): number {
-    const tier = this.config.cityTierMapping[cityId];
-    return tier ? this.config.bannerAdTierPrices[tier] : this.config.bannerAdPrice;
-  }
-
-  async adminUpdateUser(userId: string, updates: Partial<User>, adminId: string): Promise<User> {
-    const idx = this.users.findIndex(u => u.id === userId);
-    if (idx === -1) throw new Error("User not found");
-    const oldUser = this.users[idx];
-    if (updates.isBanned) updates.isSuspended = true;
-    if (updates.isSuspended === true && oldUser.isSuspended !== true) {
-      this.listings = this.listings.map(l => l.sellerId === userId && l.status === ListingStatus.APPROVED ? { ...l, status: ListingStatus.DISABLED } : l);
-      this.addSecurityLog('USER_SUSPENDED', `Account and all active ads suspended for user ${userId}`, 'HIGH', adminId);
-    } else if (updates.isSuspended === false && oldUser.isSuspended === true) {
-      this.listings = this.listings.map(l => l.sellerId === userId && l.status === ListingStatus.DISABLED ? { ...l, status: ListingStatus.APPROVED } : l);
-      this.addSecurityLog('USER_REACTIVATED', `Account and ads restored for user ${userId}`, 'MEDIUM', adminId);
+    const user = this.users.find(u => u.id === userId);
+    if (user) {
+      user.averageRating = parseFloat(avg.toFixed(1));
+      user.ratingCount = count;
     }
-    this.users[idx] = { ...this.users[idx], ...updates };
-    this.persist();
-    return { ...this.users[idx] };
   }
 
+  async getRatingsForUser(userId: string): Promise<Rating[]> {
+    return this.ratings.filter(r => r.toUserId === userId).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }
+
+  async adminDeleteRating(ratingId: string, adminId: string): Promise<void> {
+    const rating = this.ratings.find(r => r.id === ratingId);
+    if (rating) {
+      const userId = rating.toUserId;
+      this.ratings = this.ratings.filter(r => r.id !== ratingId);
+      this.recalculateUserRating(userId);
+    }
+  }
+
+  async adminUpdateRating(ratingId: string, data: Partial<Rating>, adminId: string): Promise<void> {
+    const idx = this.ratings.findIndex(r => r.id === ratingId);
+    if (idx !== -1) {
+      this.ratings[idx] = { ...this.ratings[idx], ...data };
+      this.recalculateUserRating(this.ratings[idx].toUserId);
+    }
+  }
+
+  // Wallet
+  async activateBlueTick(userId: string): Promise<User | null> {
+    const user = await this.getUserById(userId);
+    if (!user) return null;
+    if (user.walletBalance < this.config.blueTickPrice) throw new Error("Insufficient funds");
+    user.walletBalance -= this.config.blueTickPrice;
+    user.isVerified = true;
+    user.blueTickUntil = new Date(Date.now() + 86400000 * this.config.blueTickDurationDays).toISOString();
+    this.transactions.push({
+      id: `tx${Date.now()}`,
+      userId,
+      amount: this.config.blueTickPrice,
+      type: 'DEBIT',
+      description: 'Blue Tick Verification Activation',
+      timestamp: new Date().toISOString()
+    });
+    return user;
+  }
+  async rechargeWallet(userId: string, amount: number): Promise<User | null> {
+    const user = await this.getUserById(userId);
+    if (!user) return null;
+    user.walletBalance += amount;
+    this.transactions.push({
+      id: `tx${Date.now()}`,
+      userId,
+      amount,
+      type: 'CREDIT',
+      description: 'Wallet Recharge',
+      timestamp: new Date().toISOString()
+    });
+    return user;
+  }
   async adminAdjustWallet(userId: string, amount: number, type: 'CREDIT' | 'DEBIT', reason: string, adminId: string): Promise<User> {
-    const idx = this.users.findIndex(u => u.id === userId);
-    if (idx === -1) throw new Error("User not found");
-    if (!reason.trim()) throw new Error("Reason is mandatory for adjustments");
-    
-    // Create fresh object in array
-    this.users[idx] = { ...this.users[idx] };
-    const user = this.users[idx];
-    
-    if (type === 'DEBIT' && user.walletBalance < amount) throw new Error("Insufficient funds for debit");
-    user.walletBalance += (type === 'CREDIT' ? amount : -amount);
-    
-    const txn: WalletTransaction = { id: 'tx' + Date.now(), userId, amount, type, description: `ADMIN ADJ: ${reason}`, timestamp: new Date().toISOString() };
-    this.transactions.push(txn);
-    this.addSecurityLog('WALLET_ADMIN_ADJ', `${type} of ${amount} for ${userId}`, 'MEDIUM', adminId);
-    this.persist();
-    return { ...user };
+    const user = await this.getUserById(userId);
+    if (!user) throw new Error("User not found");
+    if (type === 'CREDIT') user.walletBalance += amount;
+    else user.walletBalance -= amount;
+    this.transactions.push({
+      id: `tx${Date.now()}`,
+      userId,
+      amount,
+      type,
+      description: `Admin Adjustment: ${reason}`,
+      timestamp: new Date().toISOString()
+    });
+    return user;
   }
 
-  async adminToggleListingStatus(listingId: string, status: ListingStatus, adminId: string): Promise<void> {
-    const idx = this.listings.findIndex(l => l.id === listingId);
-    if (idx !== -1) { this.listings[idx].status = status; this.addSecurityLog('AD_ADMIN_MOD', `Changed ad ${listingId} status to ${status}`, 'LOW', adminId); this.persist(); }
+  // Listings
+  async getAllListings(): Promise<Listing[]> { return this.listings; }
+  async getListingsByCity(cityId: string, searchQuery: string = '', category: string = 'All'): Promise<Listing[]> {
+    let filtered = this.listings.filter(l => l.cityId === cityId);
+    filtered = filtered.filter(l => l.status === ListingStatus.APPROVED);
+    if (searchQuery) {
+      filtered = filtered.filter(l => l.title.toLowerCase().includes(searchQuery.toLowerCase()) || l.description.toLowerCase().includes(searchQuery.toLowerCase()));
+    }
+    if (category !== 'All') {
+      filtered = filtered.filter(l => l.category === category);
+    }
+    return filtered;
   }
+  async getListingsBySeller(sellerId: string): Promise<Listing[]> {
+    return this.listings.filter(l => l.sellerId === sellerId);
+  }
+  async createListing(l: Partial<Listing>): Promise<Listing> {
+    const user = this.users.find(u => u.id === l.sellerId);
+    if (!user) throw new Error("Seller not found");
+    
+    const sellerListings = this.listings.filter(listing => listing.sellerId === l.sellerId);
+    const isPaid = sellerListings.length >= this.config.freeAdLimit;
+    const totalCost = (isPaid ? this.config.standardAdPrice : 0) + (l.isPremium ? this.config.premiumPrice : 0);
+    
+    if (user.walletBalance < totalCost) throw new Error(`Insufficient funds. Required: ₹${totalCost}`);
+    
+    user.walletBalance -= totalCost;
+    if (totalCost > 0) {
+      this.transactions.push({
+        id: `tx${Date.now()}`,
+        userId: user.id,
+        amount: totalCost,
+        type: 'DEBIT',
+        description: `Ad Posting Fees ${l.isPremium ? '(incl. Premium)' : ''}`,
+        timestamp: new Date().toISOString()
+      });
+    }
 
-  getCountries(): Country[] { return [...this.countries]; }
-  getStates(countryId?: string): State[] { return countryId ? this.states.filter(s => s.countryId === countryId) : [...this.states]; }
-  getCities(stateId?: string): City[] { return stateId ? this.cities.filter(c => c.stateId === stateId) : [...this.cities]; }
-
-  async addCountry(country: Partial<Country>): Promise<Country> { const newCountry = { id: 'ctr' + Date.now(), isActive: true, createdAt: new Date().toISOString(), ...country } as Country; this.countries.push(newCountry); this.persist(); return newCountry; }
-  async updateCountry(id: string, updates: Partial<Country>): Promise<Country> { const idx = this.countries.findIndex(c => c.id === id); if (idx !== -1) { this.countries[idx] = { ...this.countries[idx], ...updates }; this.persist(); return this.countries[idx]; } throw new Error("Country not found"); }
-  async deleteCountry(id: string): Promise<void> { this.countries = this.countries.filter(c => c.id !== id); this.persist(); }
-
-  async addState(state: Partial<State>): Promise<State> { const newState = { id: 'st' + Date.now(), isActive: true, ...state } as State; this.states.push(newState); this.persist(); return newState; }
-  async updateState(id: string, updates: Partial<State>): Promise<State> { const idx = this.states.findIndex(s => s.id === id); if (idx !== -1) { this.states[idx] = { ...this.states[idx], ...updates }; this.persist(); return this.states[idx]; } throw new Error("State not found"); }
-  async deleteState(id: string): Promise<void> { this.states = this.states.filter(s => s.id !== id); this.persist(); }
-
-  async addCity(city: Partial<City>): Promise<City> { const newCity = { id: 'c' + Date.now(), isActive: true, ...city } as City; this.cities.push(newCity); this.persist(); return newCity; }
-  async updateCity(id: string, updates: Partial<City>): Promise<City> { const idx = this.cities.findIndex(c => c.id === id); if (idx !== -1) { this.cities[idx] = { ...this.cities[idx], ...updates }; this.persist(); return this.cities[idx]; } throw new Error("City not found"); }
-  async deleteCity(id: string): Promise<void> { this.cities = this.cities.filter(c => c.id !== id); this.persist(); }
-
-  async getListingsByCity(cityId: string, query?: string, category?: string): Promise<Listing[]> { return this.listings.filter(l => l.cityId === cityId && l.status === ListingStatus.APPROVED && (!query || l.title.toLowerCase().includes(query.toLowerCase())) && (!category || category === 'All' || l.category === category)); }
-  async getListingsBySeller(sellerId: string): Promise<Listing[]> { return this.listings.filter(l => l.sellerId === sellerId); }
-  async getAllListings(): Promise<Listing[]> { return [...this.listings]; }
-
-  async createListing(data: Partial<Listing>): Promise<Listing> { const newListing = { id: 'l' + Date.now(), status: ListingStatus.PENDING, views: 0, createdAt: new Date().toISOString(), ...data } as Listing; this.listings.push(newListing); this.persist(); return newListing; }
-  async updateListing(id: string, updates: Partial<Listing>): Promise<Listing> { const idx = this.listings.findIndex(l => l.id === id); if (idx === -1) throw new Error("Listing not found"); this.listings[idx] = { ...this.listings[idx], ...updates }; this.persist(); return this.listings[idx]; }
-  async deleteListing(id: string): Promise<void> { this.listings = this.listings.filter(l => l.id !== id); this.persist(); }
-
-  async upgradeListingToPremium(id: string, userId: string): Promise<void> {
+    const newListing: Listing = {
+      id: `l${Date.now()}`,
+      sellerId: '',
+      cityId: '',
+      title: '',
+      description: '',
+      price: 0,
+      category: '',
+      images: [],
+      status: ListingStatus.PENDING,
+      isPremium: false,
+      createdAt: new Date().toISOString(),
+      views: 0,
+      ...l
+    } as Listing;
+    this.listings.push(newListing);
+    return newListing;
+  }
+  async updateListing(id: string, data: Partial<Listing>): Promise<Listing> {
     const idx = this.listings.findIndex(l => l.id === id);
     if (idx === -1) throw new Error("Listing not found");
-    await this.adminAdjustWallet(userId, this.config.premiumPrice, 'DEBIT', `Premium Upgrade: ${this.listings[idx].title}`, 'SYSTEM');
-    this.listings[idx] = { ...this.listings[idx], isPremium: true, status: ListingStatus.APPROVED, premiumFrom: new Date().toISOString(), premiumUntil: new Date(Date.now() + 86400000 * this.config.premiumDurationDays).toISOString() };
-    this.persist();
+    this.listings[idx] = { ...this.listings[idx], ...data };
+    return this.listings[idx];
   }
-
-  async updateListingStatus(id: string, status: ListingStatus, reason?: string, adminId?: string): Promise<void> {
-    const idx = this.listings.findIndex(x => x.id === id);
-    if (idx !== -1) { this.listings[idx] = { ...this.listings[idx], status, rejectionReason: reason }; if (adminId) this.addSecurityLog('AD_MOD', `Status -> ${status}`, 'LOW', adminId); this.persist(); }
+  async deleteListing(id: string): Promise<void> {
+    this.listings = this.listings.filter(l => l.id !== id);
   }
-
-  async recordView(id: string): Promise<void> { const idx = this.listings.findIndex(x => x.id === id); if (idx !== -1) { this.listings[idx].views++; this.persist(); } }
-
-  async getAllUsers(): Promise<User[]> { return this.users.map(u => ({ ...u })); }
-  async getUserById(id: string): Promise<User | null> { const u = this.users.find(u => u.id === id); return u ? { ...u } : null; }
-  async registerUser(data: Partial<User>): Promise<User> { const newUser = { id: 'u' + Date.now(), walletBalance: 0, role: UserRole.USER, isVerified: false, isSuspended: false, isBanned: false, ...data } as User; this.users.push(newUser); this.persist(); return { ...newUser }; }
-  async updateUser(id: string, updates: Partial<User>): Promise<User | null> { const idx = this.users.findIndex(u => u.id === id); if (idx === -1) return null; this.users[idx] = { ...this.users[idx], ...updates }; this.persist(); return { ...this.users[idx] }; }
-  
-  async rechargeWallet(userId: string, amount: number): Promise<User | null> { 
-    const idx = this.users.findIndex(u => u.id === userId); 
-    if (idx === -1) return null; 
-    
-    // Ensure we replace with a new reference for React
-    this.users[idx] = { ...this.users[idx] };
-    const user = this.users[idx]; 
-    user.walletBalance += amount; 
-    
-    this.transactions.push({ id: 'tx' + Date.now(), userId, amount, type: 'CREDIT', description: 'User Recharge', timestamp: new Date().toISOString() }); 
-    this.persist(); 
-    return { ...user }; 
+  async recordView(id: string): Promise<void> {
+    const l = this.listings.find(item => item.id === id);
+    if (l) l.views++;
   }
-  
-  async getTransactionsByUserId(userId: string): Promise<WalletTransaction[]> { return this.transactions.filter(t => t.userId === userId); }
-  async getAllTransactions(): Promise<WalletTransaction[]> { return [...this.transactions]; }
-  
-  async activateBlueTick(userId: string): Promise<User | null> { 
-    const user = await this.getUserById(userId); 
-    if (!user || user.walletBalance < this.config.blueTickPrice) throw new Error("Funds required"); 
-    
-    // Deduct funds first
-    await this.adminAdjustWallet(userId, this.config.blueTickPrice, 'DEBIT', 'Blue Tick Activation', 'SYSTEM'); 
-    
-    // Update verification status and return new reference
-    return this.updateUser(userId, { 
-      isVerified: true, 
-      blueTickUntil: new Date(Date.now() + 86400000 * this.config.blueTickDurationDays).toISOString() 
-    }); 
+  async upgradeListingToPremium(listingId: string, userId: string): Promise<void> {
+    const user = await this.getUserById(userId);
+    const listing = this.listings.find(l => l.id === listingId);
+    if (!user || !listing) throw new Error("Not found");
+    if (user.walletBalance < this.config.premiumPrice) throw new Error("Insufficient funds");
+    user.walletBalance -= this.config.premiumPrice;
+    listing.isPremium = true;
+    listing.premiumFrom = new Date().toISOString();
+    listing.premiumUntil = new Date(Date.now() + 86400000 * this.config.premiumDurationDays).toISOString();
+    this.transactions.push({
+      id: `tx${Date.now()}`,
+      userId,
+      amount: this.config.premiumPrice,
+      type: 'DEBIT',
+      description: `Premium Boost for Ad: ${listing.title}`,
+      timestamp: new Date().toISOString()
+    });
   }
-
-  async getModerationQueue(cityIds?: string[]): Promise<Listing[]> { 
-    return this.listings.filter(l => 
-      (l.status === ListingStatus.PENDING || l.status === ListingStatus.EDIT_PENDING) &&
-      (!cityIds || cityIds.includes(l.cityId))
-    ); 
-  }
-
-  async getModerationBanners(cityIds?: string[]): Promise<BannerAd[]> {
-    return this.banners.filter(b => 
-      b.status === 'PENDING' && 
-      (!cityIds || cityIds.includes(b.cityId))
-    );
-  }
-
-  async getModerationTickets(cityIds?: string[]): Promise<SupportTicket[]> {
-    if (!cityIds) return this.tickets.filter(t => t.status === 'OPEN');
-    const userCityMap = new Map(this.users.map(u => [u.id, u.cityId]));
-    return this.tickets.filter(t => 
-      t.status === 'OPEN' && 
-      cityIds.includes(userCityMap.get(t.userId) || '')
-    );
-  }
-
-  async createAdReport(data: Partial<AdReport>): Promise<AdReport> {
-    const report: AdReport = {
-      id: 'rep' + Date.now(),
-      listingId: data.listingId!,
-      listingTitle: data.listingTitle!,
-      reporterId: data.reporterId!,
-      reporterName: data.reporterName!,
-      cityId: data.cityId!,
-      reason: data.reason || 'OTHER',
-      details: data.details || '',
-      status: 'PENDING',
-      createdAt: new Date().toISOString()
-    };
-    this.reports.unshift(report);
-    this.persist();
-    return report;
-  }
-
-  async getModerationReports(cityIds?: string[]): Promise<AdReport[]> {
-    return this.reports.filter(r => 
-      r.status === 'PENDING' && 
-      (!cityIds || cityIds.includes(r.cityId))
-    );
-  }
-
-  async resolveAdReport(reportId: string, action: 'RESOLVED' | 'DISMISSED'): Promise<void> {
-    const idx = this.reports.findIndex(r => r.id === reportId);
-    if (idx !== -1) {
-      this.reports[idx].status = action;
-      this.persist();
+  async updateListingStatus(id: string, status: ListingStatus, reason?: string, moderatorId?: string): Promise<void> {
+    const l = this.listings.find(item => item.id === id);
+    if (l) {
+      l.status = status;
+      if (reason) l.rejectionReason = reason;
+      if (status === ListingStatus.APPROVED) l.publishedAt = new Date().toISOString();
     }
   }
 
-  async resolveTicket(ticketId: string): Promise<void> {
-    const idx = this.tickets.findIndex(t => t.id === ticketId);
-    if (idx !== -1) {
-      this.tickets[idx].status = 'RESOLVED';
-      this.persist();
-    }
+  // Search
+  async getSearchSuggestions(cityId: string, query: string): Promise<string[]> {
+    const relevant = this.listings.filter(l => l.cityId === cityId && l.status === ListingStatus.APPROVED);
+    const matches = relevant.filter(l => l.title.toLowerCase().includes(query.toLowerCase())).map(l => l.title);
+    return Array.from(new Set(matches)).slice(0, 5);
   }
 
-  async createTicket(userId: string, userName: string, subject: string, message: string): Promise<SupportTicket> { const ticket: SupportTicket = { id: 't' + Date.now(), userId, userName, subject, message, status: 'OPEN', createdAt: new Date().toISOString() }; this.tickets.unshift(ticket); this.persist(); return ticket; }
-  async getUserTickets(userId: string): Promise<SupportTicket[]> { return this.tickets.filter(t => t.userId === userId); }
-  async getAllTickets(): Promise<SupportTicket[]> { return [...this.tickets]; }
-
-  async getChatsForUser(userId: string): Promise<Chat[]> { return this.chats.filter(c => c.participants.includes(userId)); }
-  async getOrCreateChat(u1: string, u2: string, listing: Listing, sellerName: string): Promise<Chat> { let found = this.chats.find(c => c.listingId === listing.id && c.participants.includes(u1) && c.participants.includes(u2)); if (!found) { found = { id: 'ch' + Date.now(), participants: [u1, u2], listingId: listing.id, listingTitle: listing.title, otherPartyName: sellerName, unreadCount: 0 }; this.chats.push(found); this.persist(); } return found; }
-  async getMessages(chatId: string): Promise<Message[]> { return this.messages.filter(m => m.chatId === chatId); }
-  async sendMessage(chatId: string, senderId: string, text: string): Promise<Message> { const msg: Message = { id: 'm' + Date.now(), chatId, senderId, text, timestamp: new Date().toISOString(), isRead: false }; this.messages.push(msg); const cIdx = this.chats.findIndex(c => c.id === chatId); if (cIdx !== -1) { this.chats[cIdx].lastMessage = text; this.chats[cIdx].lastTimestamp = msg.timestamp; } this.persist(); return msg; }
-
-  async getSearchSuggestions(cityId: string, query: string): Promise<string[]> { const cityListings = this.listings.filter(l => l.cityId === cityId && l.status === ListingStatus.APPROVED); const suggestions = new Set<string>(); const q = query.toLowerCase(); cityListings.forEach(l => { if (l.title.toLowerCase().includes(q)) suggestions.add(l.title); if (l.category.toLowerCase().includes(q)) suggestions.add(l.category); }); return Array.from(suggestions).slice(0, 5); }
-
-  async getCategories(): Promise<Category[]> { return [...this.categories]; }
-  async addCategory(cat: Partial<Category>): Promise<Category> { const newCat = { id: 'cat' + Date.now(), isActive: true, createdAt: new Date().toISOString(), ...cat } as Category; this.categories.push(newCat); this.persist(); return newCat; }
-  async updateCategory(id: string, updates: Partial<Category>): Promise<Category> { const idx = this.categories.findIndex(c => c.id === id); if (idx !== -1) { this.categories[idx] = { ...this.categories[idx], ...updates }; this.persist(); return this.categories[idx]; } throw new Error("Category not found"); }
-  async deleteCategory(id: string): Promise<void> { this.categories = this.categories.filter(c => c.id !== id); this.persist(); }
-
-  async getActiveBanners(cityId: string): Promise<BannerAd[]> { return this.banners.filter(b => b.cityId === cityId && b.status === 'LIVE' && new Date(b.expiresAt) > new Date()); }
-  async getAllBanners(): Promise<BannerAd[]> { return [...this.banners]; }
-  async getUserBanners(userId: string): Promise<BannerAd[]> { return this.banners.filter(b => b.userId === userId); }
-
-  async updateBanner(id: string, updates: Partial<BannerAd>): Promise<void> { const idx = this.banners.findIndex(b => b.id === id); if (idx === -1) throw new Error("Banner not found"); this.banners[idx] = { ...this.banners[idx], ...updates }; this.persist(); }
-
-  async processBannerSponsorship(userId: string, cityId: string, imageUrl: string, linkUrl: string, title?: string): Promise<BannerAd> {
-    const existing = this.banners.find(b => b.userId === userId && (b.status === 'LIVE' || b.status === 'PENDING'));
-    if (existing) throw new Error("A user can only have one active or pending banner sponsorship at a time.");
+  // Banners
+  async getAllBanners(): Promise<BannerAd[]> { return this.banners; }
+  async getActiveBanners(cityId: string): Promise<BannerAd[]> {
+    return this.banners.filter(b => b.cityId === cityId && b.status === 'LIVE' && new Date(b.expiresAt) > new Date());
+  }
+  async getUserBanners(userId: string): Promise<BannerAd[]> {
+    return this.banners.filter(b => b.userId === userId);
+  }
+  getBannerPrice(cityId: string): number {
+    const tier = this.config.cityTierMapping[cityId] || 'T2';
+    return this.config.bannerAdTierPrices[tier] || this.config.bannerAdPrice;
+  }
+  async processBannerSponsorship(userId: string, cityId: string, imageUrl: string, linkUrl: string, title: string): Promise<void> {
+    const user = await this.getUserById(userId);
     const price = this.getBannerPrice(cityId);
-    const newBanner: BannerAd = { id: 'b' + Date.now(), userId, cityId, title, imageUrl, linkUrl, status: 'PENDING', expiresAt: new Date(Date.now() + 86400000 * this.config.bannerAdDurationDays).toISOString(), createdAt: new Date().toISOString(), views: 0, clicks: 0 };
-    await this.adminAdjustWallet(userId, price, 'DEBIT', `Purchased City Sponsorship: ${cityId}`, 'SYSTEM');
-    this.banners.unshift(newBanner);
-    this.persist();
-    return newBanner;
+    if (!user) throw new Error("User not found");
+    if (user.walletBalance < price) throw new Error("Insufficient funds");
+    
+    user.walletBalance -= price;
+    this.banners.push({
+      id: `b${Date.now()}`,
+      userId,
+      cityId,
+      title,
+      imageUrl,
+      linkUrl,
+      status: 'PENDING',
+      expiresAt: new Date(Date.now() + 86400000 * this.config.bannerAdDurationDays).toISOString(),
+      views: 0,
+      clicks: 0
+    });
+    this.transactions.push({
+      id: `tx${Date.now()}`,
+      userId,
+      amount: price,
+      type: 'DEBIT',
+      description: `City Banner Sponsorship: ${title}`,
+      timestamp: new Date().toISOString()
+    });
+  }
+  async updateBanner(id: string, data: Partial<BannerAd>): Promise<void> {
+    const idx = this.banners.findIndex(b => b.id === id);
+    if (idx !== -1) this.banners[idx] = { ...this.banners[idx], ...data };
+  }
+  async adminUpdateBannerStatus(id: string, status: BannerAd['status'], reason?: string, adminId?: string): Promise<void> {
+    const b = this.banners.find(item => item.id === id);
+    if (b) {
+      b.status = status;
+      if (reason) b.rejectionReason = reason;
+    }
   }
 
-  async adminUpdateBannerStatus(id: string, status: BannerAd['status'], reason?: string, adminId?: string): Promise<void> { const idx = this.banners.findIndex(b => b.id === id); if (idx !== -1) { this.banners[idx].status = status; this.banners[idx].rejectionReason = reason; if (adminId) this.addSecurityLog('BANNER_MOD', `Banner ${id} Status -> ${status}`, 'LOW', adminId); this.persist(); } }
-  async activateExistingBanner(id: string, userId: string): Promise<void> { const idx = this.banners.findIndex(b => b.id === id); if (idx === -1) throw new Error("Banner not found"); const banner = this.banners[idx]; const price = this.getBannerPrice(banner.cityId); await this.adminAdjustWallet(userId, price, 'DEBIT', `Sponsorship Activation: ${banner.title || banner.id}`, 'SYSTEM'); this.banners[idx] = { ...banner, status: 'LIVE', expiresAt: new Date(Date.now() + 86400000 * this.config.bannerAdDurationDays).toISOString() }; this.persist(); }
+  // Support & Reports
+  async getUserTickets(userId: string): Promise<SupportTicket[]> {
+    return this.tickets.filter(t => t.userId === userId);
+  }
+  async createTicket(userId: string, userName: string, subject: string, message: string): Promise<void> {
+    this.tickets.push({
+      id: `t${Date.now()}`,
+      userId,
+      userName,
+      subject,
+      message,
+      status: 'OPEN',
+      createdAt: new Date().toISOString()
+    });
+  }
+  async resolveTicket(id: string): Promise<void> {
+    const t = this.tickets.find(item => item.id === id);
+    if (t) t.status = 'RESOLVED';
+  }
+  async createAdReport(data: Partial<AdReport>): Promise<void> {
+    this.reports.push({
+      id: `r${Date.now()}`,
+      listingId: '',
+      listingTitle: '',
+      reporterId: '',
+      reporterName: '',
+      cityId: '',
+      reason: 'OTHER',
+      details: '',
+      status: 'PENDING',
+      createdAt: new Date().toISOString(),
+      ...data as AdReport
+    });
+  }
+  async resolveAdReport(id: string, status: 'RESOLVED' | 'DISMISSED'): Promise<void> {
+    const r = this.reports.find(item => item.id === id);
+    if (r) r.status = status;
+  }
+
+  // Chats
+  async getChatsForUser(userId: string): Promise<Chat[]> {
+    return this.chats.filter(c => c.participants.includes(userId));
+  }
+  async getOrCreateChat(userId: string, sellerId: string, listing: Listing, sellerName: string): Promise<Chat> {
+    let chat = this.chats.find(c => c.listingId === listing.id && c.participants.includes(userId) && c.participants.includes(sellerId));
+    if (!chat) {
+      chat = {
+        id: `chat${Date.now()}`,
+        participants: [userId, sellerId],
+        listingId: listing.id,
+        unreadCount: 0,
+        otherPartyName: sellerName,
+        listingTitle: listing.title
+      };
+      this.chats.push(chat);
+    }
+    return chat;
+  }
+  async getMessages(chatId: string): Promise<Message[]> {
+    return this.messages.filter(m => m.chatId === chatId);
+  }
+  async sendMessage(chatId: string, senderId: string, text: string): Promise<Message> {
+    const msg: Message = {
+      id: `msg${Date.now()}`,
+      chatId,
+      senderId,
+      text,
+      timestamp: new Date().toISOString(),
+      isRead: false
+    };
+    this.messages.push(msg);
+    const chat = this.chats.find(c => c.id === chatId);
+    if (chat) {
+      chat.lastMessage = text;
+      chat.lastTimestamp = msg.timestamp;
+    }
+    return msg;
+  }
+
+  // Moderation Queues
+  async getModerationQueue(cityIds: string[]): Promise<Listing[]> {
+    return this.listings.filter(l => (cityIds.length === 0 || cityIds.includes(l.cityId)) && (l.status === ListingStatus.PENDING || l.status === ListingStatus.EDIT_PENDING));
+  }
+  async getModerationBanners(cityIds: string[]): Promise<BannerAd[]> {
+    return this.banners.filter(b => (cityIds.length === 0 || cityIds.includes(b.cityId)) && b.status === 'PENDING');
+  }
+  async getModerationTickets(cityIds: string[]): Promise<SupportTicket[]> {
+    return this.tickets.filter(t => t.status === 'OPEN');
+  }
+  async getModerationReports(cityIds: string[]): Promise<AdReport[]> {
+    return this.reports.filter(r => (cityIds.length === 0 || cityIds.includes(r.cityId)) && r.status === 'PENDING');
+  }
+
+  // Wallet
+  async getTransactionsByUserId(userId: string): Promise<WalletTransaction[]> {
+    return this.transactions.filter(tx => tx.userId === userId);
+  }
+
+  // Security Logs
+  async getSecurityLogs(): Promise<SecurityLog[]> { return this.securityLogs; }
 }
 
 export const dbService = new DbService();

@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { User, Chat } from '../types';
 import { dbService } from '../services/dbService';
@@ -97,7 +96,7 @@ export const Inbox: React.FC<InboxProps> = ({ user, onSelectChat }) => {
         </div>
         <div>
           <p className="text-sm font-black text-blue-900">Safety Tip</p>
-          <p className="text-xs text-blue-700/80">Never share your OTP or bank details in chat. ADOIZ never asks for your password.</p>
+          <p className="text-xs text-blue-700/80">Never share your OTP or bank details in chat. adoiz never asks for your password.</p>
         </div>
       </div>
     </div>

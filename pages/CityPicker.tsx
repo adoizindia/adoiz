@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { dbService } from '../services/dbService';
 import { City, State, Country } from '../types';
@@ -49,7 +48,7 @@ export const CityPicker: React.FC<CityPickerProps> = ({ onSelect }) => {
     <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 bg-gray-900/80 backdrop-blur-sm">
       <div className="bg-white w-full max-w-md rounded-2xl shadow-2xl overflow-hidden p-8">
         <div className="text-center mb-8">
-          <h2 className="text-3xl font-black text-blue-600 mb-2">Welcome to ADOIZ</h2>
+          <h2 className="text-3xl font-black text-blue-600 mb-2">Welcome to adoiz</h2>
           <p className="text-gray-500">Please select your location to continue</p>
         </div>
 

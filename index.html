@@ -4,13 +4,13 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>ADOIZ | City-Locked Marketplace</title>
+    <title>adoiz | City-Locked Marketplace</title>
     
     <!-- PWA Primary Metadata -->
     <meta name="mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="default">
-    <meta name="apple-mobile-web-app-title" content="ADOIZ">
+    <meta name="apple-mobile-web-app-title" content="adoiz">
     <link rel="apple-touch-icon" href="https://picsum.photos/seed/adoiz/192">
     
     <script src="https://cdn.tailwindcss.com"></script>
@@ -46,8 +46,8 @@
       (function() {
         const storedConfig = localStorage.getItem('adoiz_config');
         let config = { 
-          siteName: 'ADOIZ', 
-          branding: { primaryColor: '#1a73e8', appName: 'ADOIZ', pwaIcon: 'https://picsum.photos/seed/adoiz/192' } 
+          siteName: 'adoiz', 
+          branding: { primaryColor: '#1a73e8', appName: 'adoiz', pwaIcon: 'https://picsum.photos/seed/adoiz/192' } 
         };
         
         if (storedConfig) {
@@ -62,8 +62,8 @@
 
         // Generate Dynamic Manifest
         const manifest = {
-          "name": config.branding?.appName || config.siteName || "ADOIZ",
-          "short_name": config.branding?.appName || config.siteName || "ADOIZ",
+          "name": config.branding?.appName || config.siteName || "adoiz",
+          "short_name": config.branding?.appName || config.siteName || "adoiz",
           "start_url": "/",
           "display": "standalone",
           "background_color": "#ffffff",

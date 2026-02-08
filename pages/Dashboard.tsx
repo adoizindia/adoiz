@@ -255,18 +255,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 <i className="fas fa-wallet"></i> Wallet: ₹{user.walletBalance.toLocaleString()}
               </button>
               
-              {!user.isVerified && (
+              {user.role === UserRole.ADMIN && <button onClick={onAdminPanel} className="bg-slate-900 text-white px-8 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl cursor-pointer hover:bg-black active:scale-95 transition-all">Admin Panel</button>}
+              
+              {user.role === UserRole.MODERATOR && (
                 <button 
-                  onClick={handleActivateBlueTick} 
-                  disabled={isProcessing === 'bluetick'} 
-                  className="bg-emerald-600 text-white px-8 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center gap-3 hover:bg-emerald-700 active:scale-95 transition-all disabled:opacity-50 cursor-pointer"
+                  onClick={onModerationPanel} 
+                  className="bg-emerald-600 text-white px-8 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl cursor-pointer hover:bg-emerald-700 active:scale-95 transition-all"
                 >
-                  {isProcessing === 'bluetick' ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-check-circle"></i>} 
-                  Get Blue tick verification (₹{config.blueTickPrice})
+                  Moderation Panel
                 </button>
               )}
-
-              {user.role === UserRole.ADMIN && <button onClick={onAdminPanel} className="bg-slate-900 text-white px-8 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl cursor-pointer hover:bg-black active:scale-95 transition-all">Admin Panel</button>}
             </div>
           </div>
         </div>

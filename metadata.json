@@ -1,5 +1,5 @@
 {
-  "name": "Adoiz Marketplace",
+  "name": "adoiz Marketplace",
   "description": "An enterprise-grade city-based classified marketplace with strict city-locking, multi-role RBAC, and advanced moderation systems.",
   "requestFramePermissions": [
     "camera",

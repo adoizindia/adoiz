@@ -97,7 +97,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, onGoogleLogin, onFacebookLo
             <h1 className="text-4xl font-black text-white tracking-tighter">A</h1>
           </div>
           <h2 className="text-3xl font-black text-gray-900 tracking-tight">
-            {isLogin ? 'Welcome Back' : 'Join ADOIZ'}
+            {isLogin ? 'Welcome Back' : 'Join adoiz'}
           </h2>
           <p className="text-gray-400 text-[10px] mt-2 font-black uppercase tracking-[0.3em]">Enterprise Local Marketplace</p>
         </div>
