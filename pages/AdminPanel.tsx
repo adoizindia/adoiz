@@ -473,7 +473,7 @@ export const AdminPanel: React.FC<{
       ];
       case 'SYSTEM': return [
         { id: 'site', label: 'Site Branding' },
-        { id: 'gateways_sys', label: 'Payment & API' },
+        { id: 'gateways_sys', label: 'Communication' },
         { id: 'logs', label: 'Security Logs' }
       ];
       default: return [{ id: 'default', label: 'Management' }];
@@ -1558,6 +1558,159 @@ export const AdminPanel: React.FC<{
                 </div>
                 <button onClick={handleConfigCommit} className="w-full bg-blue-600 text-white py-4 rounded-3xl font-black uppercase text-[10px] tracking-widest shadow-xl">Commit Communication Protocols</button>
              </div>
+          </div>
+        </div>
+      );
+    }
+    if (activeTab === 'gateways_sys') {
+      const smsGateways = [
+        { id: 'twilio', label: 'Twilio', icon: 'fa-sms', fields: [
+          { key: 'sid', label: 'Account SID' },
+          { key: 'authToken', label: 'Auth Token' },
+          { key: 'fromNumber', label: 'Sender ID/Phone' }
+        ]},
+        { id: 'msg91', label: 'MSG91', icon: 'fa-paper-plane', fields: [
+          { key: 'authKey', label: 'Auth Key' },
+          { key: 'senderId', label: 'Sender ID' }
+        ]},
+        { id: 'textlocal', label: 'Textlocal', icon: 'fa-message', fields: [
+          { key: 'apiKey', label: 'API Key' },
+          { key: 'sender', label: 'Sender' }
+        ]}
+      ];
+
+      const emailGateways = [
+        { id: 'sendgrid', label: 'SendGrid', icon: 'fa-envelope-open-text', fields: [
+          { key: 'apiKey', label: 'API Key' },
+          { key: 'fromEmail', label: 'Verified Sender Email' }
+        ]},
+        { id: 'mailgun', label: 'Mailgun', icon: 'fa-envelope-circle-check', fields: [
+          { key: 'apiKey', label: 'API Key' },
+          { key: 'domain', label: 'Domain' },
+          { key: 'fromEmail', label: 'Sender Email' }
+        ]},
+        { id: 'ses', label: 'Amazon SES', icon: 'fa-aws', fields: [
+          { key: 'accessKey', label: 'Access Key' },
+          { key: 'secretKey', label: 'Secret Key' },
+          { key: 'region', label: 'AWS Region' },
+          { key: 'fromEmail', label: 'Verified Email' }
+        ]}
+      ];
+
+      return (
+        <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 pb-20">
+          {/* SMS Section */}
+          <div className="space-y-6">
+            <h4 className="text-[11px] font-black uppercase text-gray-400 tracking-[0.2em] ml-2">SMS & OTP Infrastructure</h4>
+            <div className="grid grid-cols-1 gap-6">
+               {smsGateways.map(gw => (
+                 <div key={gw.id} className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm">
+                    <div className="flex items-center justify-between mb-8 pb-6 border-b border-gray-50">
+                       <div className="flex items-center gap-5">
+                          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl ${config.smsGateway[gw.id as keyof SystemConfig['smsGateway']]?.active ? 'bg-blue-600 text-white shadow-xl shadow-blue-50' : 'bg-gray-100 text-gray-400'}`}>
+                             <i className={`fas ${gw.icon}`}></i>
+                          </div>
+                          <div>
+                             <h5 className="text-lg font-black uppercase text-gray-900">{gw.label}</h5>
+                             <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">OTP Delivery Node</p>
+                          </div>
+                       </div>
+                       <button 
+                         onClick={() => setConfig({
+                           ...config,
+                           smsGateway: { ...config.smsGateway, [gw.id]: { ...(config.smsGateway[gw.id as keyof SystemConfig['smsGateway']] as any), active: !(config.smsGateway[gw.id as keyof SystemConfig['smsGateway']] as any)?.active } }
+                         })}
+                         className={`w-14 h-7 rounded-full relative transition-all duration-300 ${config.smsGateway[gw.id as keyof SystemConfig['smsGateway']]?.active ? 'bg-blue-600' : 'bg-gray-300'}`}
+                       >
+                         <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all duration-300 ${config.smsGateway[gw.id as keyof SystemConfig['smsGateway']]?.active ? 'left-8' : 'left-1'}`}></div>
+                       </button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                       {gw.fields.map(f => (
+                         <div key={f.key} className="space-y-1">
+                            <label className="text-[10px] font-black uppercase text-gray-400 ml-1">{f.label}</label>
+                            <input 
+                              type="password"
+                              className="w-full bg-gray-50 border border-gray-200 p-4 rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-blue-200 transition-all"
+                              value={(config.smsGateway[gw.id as keyof SystemConfig['smsGateway']] as any)?.[f.key] || ''}
+                              onChange={e => {
+                                setConfig({
+                                  ...config,
+                                  smsGateway: { ...config.smsGateway, [gw.id]: { ...(config.smsGateway[gw.id as keyof SystemConfig['smsGateway']] as any), [f.key]: e.target.value } }
+                                });
+                              }}
+                            />
+                         </div>
+                       ))}
+                    </div>
+                 </div>
+               ))}
+            </div>
+          </div>
+
+          {/* Email Section */}
+          <div className="space-y-6">
+            <h4 className="text-[11px] font-black uppercase text-gray-400 tracking-[0.2em] ml-2">Email Verification Cluster</h4>
+            <div className="grid grid-cols-1 gap-6">
+               {emailGateways.map(gw => (
+                 <div key={gw.id} className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm">
+                    <div className="flex items-center justify-between mb-8 pb-6 border-b border-gray-50">
+                       <div className="flex items-center gap-5">
+                          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl ${config.emailGateway[gw.id as keyof SystemConfig['emailGateway']]?.active ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-50' : 'bg-gray-100 text-gray-400'}`}>
+                             <i className={`fas ${gw.icon}`}></i>
+                          </div>
+                          <div>
+                             <h5 className="text-lg font-black uppercase text-gray-900">{gw.label}</h5>
+                             <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Identity Validation Service</p>
+                          </div>
+                       </div>
+                       <button 
+                         onClick={() => setConfig({
+                           ...config,
+                           emailGateway: { ...config.emailGateway, [gw.id]: { ...(config.emailGateway[gw.id as keyof SystemConfig['emailGateway']] as any), active: !(config.emailGateway[gw.id as keyof SystemConfig['emailGateway']] as any)?.active } }
+                         })}
+                         className={`w-14 h-7 rounded-full relative transition-all duration-300 ${config.emailGateway[gw.id as keyof SystemConfig['emailGateway']]?.active ? 'bg-emerald-600' : 'bg-gray-300'}`}
+                       >
+                         <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all duration-300 ${config.emailGateway[gw.id as keyof SystemConfig['emailGateway']]?.active ? 'left-8' : 'left-1'}`}></div>
+                       </button>
+                    </div>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                       {gw.fields.map(f => (
+                         <div key={f.key} className="space-y-1">
+                            <label className="text-[10px] font-black uppercase text-gray-400 ml-1">{f.label}</label>
+                            <input 
+                              type="password"
+                              className="w-full bg-gray-50 border border-gray-200 p-4 rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-emerald-200 transition-all"
+                              value={(config.emailGateway[gw.id as keyof SystemConfig['emailGateway']] as any)?.[f.key] || ''}
+                              onChange={e => {
+                                setConfig({
+                                  ...config,
+                                  emailGateway: { ...config.emailGateway, [gw.id]: { ...(config.emailGateway[gw.id as keyof SystemConfig['emailGateway']] as any), [f.key]: e.target.value } }
+                                });
+                              }}
+                            />
+                         </div>
+                       ))}
+                    </div>
+                 </div>
+               ))}
+            </div>
+          </div>
+
+          <div className="bg-slate-900 p-10 rounded-[3rem] shadow-2xl flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden">
+             <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500 rounded-full blur-[120px] opacity-10"></div>
+             <div>
+                <h4 className="text-xl font-black text-white uppercase tracking-tight">Sync Communication Stack</h4>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-2">Updating gateway logic will immediately re-route OTP and Verification clusters</p>
+             </div>
+             <button 
+                onClick={handleConfigCommit}
+                disabled={isProcessing}
+                className="w-full md:w-auto bg-blue-600 text-white px-12 py-5 rounded-[2rem] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-blue-500/20 hover:bg-blue-500 transition-all active:scale-[0.98]"
+             >
+                {isProcessing ? <i className="fas fa-circle-notch fa-spin mr-2"></i> : <i className="fas fa-satellite-dish mr-2"></i>}
+                Commit Communication Protocols
+             </button>
           </div>
         </div>
       );
