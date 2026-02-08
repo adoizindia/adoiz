@@ -802,7 +802,7 @@ export const AdminPanel: React.FC<{
                      <div className="aspect-square overflow-hidden relative">
                         <img src={l.images[0]} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                         <div className="absolute top-4 left-4 flex gap-2">
-                           <span className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest ${l.status === ListingStatus.APPROVED ? 'bg-emerald-600 text-white' : 'bg-amber-500 text-white'}`}>{l.status}</span>
+                           <span className={`px-3 py-1 rounded-lg text-[8px] font-black uppercase tracking-widest ${l.status === ListingStatus.APPROVED ? 'bg-emerald-600 text-white' : 'bg-amber-50 text-white'}`}>{l.status}</span>
                         </div>
                      </div>
                      <div className="p-6">
@@ -968,6 +968,59 @@ export const AdminPanel: React.FC<{
                  </tbody>
               </table>
            </div>
+        </div>
+      );
+    }
+    if (activeTab === 'adsense') {
+      return (
+        <div className="max-w-4xl space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-8">
+            <div className="flex items-center gap-4 mb-2">
+              <div className="w-12 h-12 bg-amber-50 text-amber-600 rounded-2xl flex items-center justify-center text-xl shadow-sm">
+                <i className="fab fa-google"></i>
+              </div>
+              <div>
+                <h3 className="text-xl font-black uppercase text-gray-900 tracking-tight">Google AdSense Integration</h3>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Manage global external advertisements</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-gray-400 ml-1 flex items-center gap-2">
+                  AdSense Code Snippet / ID
+                  <i className="fas fa-circle-info text-blue-500 cursor-help" title="Paste your Google AdSense script or auto-ads code here."></i>
+                </label>
+                <textarea 
+                  className="w-full bg-gray-50 border border-gray-100 p-6 rounded-[2rem] font-mono text-xs font-bold h-64 outline-none focus:ring-4 focus:ring-amber-500/5 focus:bg-white focus:border-amber-500 transition-all"
+                  placeholder="<!-- Paste your AdSense code here -->"
+                  value={config.googleAdsenseCode}
+                  onChange={e => setConfig({...config, googleAdsenseCode: e.target.value})}
+                />
+              </div>
+              
+              <div className="bg-amber-50 p-6 rounded-2xl border border-amber-100 flex items-start gap-4">
+                <i className="fas fa-lightbulb text-amber-600 mt-1"></i>
+                <div className="space-y-1">
+                  <p className="text-[10px] font-black text-amber-900 uppercase">Pro Tip</p>
+                  <p className="text-xs text-amber-800 font-medium leading-relaxed">
+                    Make sure to include the full script provided by Google. These ads will typically appear in dedicated slots on the product listing and search result pages.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-gray-50">
+              <button 
+                onClick={handleConfigCommit} 
+                disabled={isProcessing} 
+                className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl hover:bg-black transition-all flex items-center justify-center gap-3"
+              >
+                {isProcessing ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-cloud-upload-alt"></i>}
+                Deploy AdSense Configuration
+              </button>
+            </div>
+          </div>
         </div>
       );
     }
