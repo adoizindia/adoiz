@@ -54,13 +54,18 @@ export const AdminPanel: React.FC<{
 
   // Selection & Detail States
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [selectedListingId, setSelectedListingId] = useState<string | null>(null);
   const [detailUser, setDetailUser] = useState<User | null>(null);
+  const [detailListing, setDetailListing] = useState<Listing | null>(null);
   const [detailAds, setDetailAds] = useState<Listing[]>([]);
   const [detailTxns, setDetailTxns] = useState<WalletTransaction[]>([]);
   const [walletForm, setWalletForm] = useState({ amount: '', type: 'CREDIT' as 'CREDIT' | 'DEBIT', reason: '' });
 
   // User Identity Edit Form
   const [userEditForm, setUserEditForm] = useState<Partial<User>>({});
+  
+  // Listing Edit Form
+  const [listingEditForm, setListingEditForm] = useState<Partial<Listing>>({});
 
   // Forms for Geo/Cats
   const [geoForm, setGeoForm] = useState({ 
@@ -75,6 +80,9 @@ export const AdminPanel: React.FC<{
   const [planForm, setPlanForm] = useState<Partial<SubscriptionPlan>>({ name: '', price: 0, durationDays: 30, features: [] });
   const [newFeature, setNewFeature] = useState('');
 
+  // Added missing helper to resolve "Cannot find name 'getCityName'" error
+  const getCityName = (id: string) => CITIES.find(c => c.id === id)?.name || id;
+
   // Initial Load
   useEffect(() => {
     loadData();
@@ -86,6 +94,10 @@ export const AdminPanel: React.FC<{
   useEffect(() => {
     if (selectedUserId) loadUserDetails(selectedUserId);
   }, [selectedUserId]);
+
+  useEffect(() => {
+    if (selectedListingId) loadListingDetails(selectedListingId);
+  }, [selectedListingId]);
 
   const loadData = async () => {
     setLoading(true);
@@ -124,6 +136,17 @@ export const AdminPanel: React.FC<{
       setUserEditForm({ ...u });
       setDetailAds(ads);
       setDetailTxns(txns.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
+    }
+    setIsProcessing(false);
+  };
+
+  const loadListingDetails = async (id: string) => {
+    setIsProcessing(true);
+    const all = await dbService.getAllListings();
+    const found = all.find(item => item.id === id);
+    if (found) {
+      setDetailListing(found);
+      setListingEditForm({ ...found });
     }
     setIsProcessing(false);
   };
@@ -216,6 +239,25 @@ export const AdminPanel: React.FC<{
       await dbService.updateListingStatus(id, status, undefined, user.id);
       notify(`Ad ${status.toLowerCase()} successfully.`, "success");
       loadData();
+      if (selectedListingId === id) {
+        loadListingDetails(id);
+      }
+    } catch (err: any) {
+      notify(err.message, "error");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleListingUpdate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!detailListing) return;
+    setIsProcessing(true);
+    try {
+      const updated = await dbService.updateListing(detailListing.id, listingEditForm);
+      setDetailListing(updated);
+      notify("Ad details updated successfully.", "success");
+      loadData();
     } catch (err: any) {
       notify(err.message, "error");
     } finally {
@@ -230,6 +272,7 @@ export const AdminPanel: React.FC<{
       await dbService.deleteListing(id);
       notify("Ad removed permanently.", "error");
       loadData();
+      if (selectedListingId === id) setSelectedListingId(null);
     } catch (err: any) {
       notify(err.message, "error");
     } finally {
@@ -385,17 +428,17 @@ export const AdminPanel: React.FC<{
               {filtered.map(l => (
                 <tr key={l.id} className="text-xs font-bold hover:bg-gray-50 transition-colors">
                    <td className="px-10 py-6">
-                      <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-4 cursor-pointer group" onClick={() => setSelectedListingId(l.id)}>
                          <div className="w-12 h-12 rounded-xl overflow-hidden bg-gray-100 border border-gray-50 flex-shrink-0">
                             <img src={l.images[0]} className="w-full h-full object-cover" />
                          </div>
                          <div className="min-w-0">
-                            <p className="text-gray-900 truncate max-w-[200px]">{l.title}</p>
+                            <p className="text-gray-900 truncate max-w-[200px] group-hover:text-blue-600 transition-colors">{l.title}</p>
                             <p className="text-[8px] font-black text-blue-500 uppercase tracking-widest mt-0.5">{l.category}</p>
                          </div>
                       </div>
                    </td>
-                   <td className="px-10 py-6 text-gray-500 uppercase text-[9px]">{CITIES.find(c => c.id === l.cityId)?.name || l.cityId}</td>
+                   <td className="px-10 py-6 text-gray-500 uppercase text-[9px]">{getCityName(l.cityId)}</td>
                    <td className="px-10 py-6 text-gray-400 text-[9px] font-mono">{l.sellerId}</td>
                    <td className="px-10 py-6 text-gray-900">₹{l.price.toLocaleString()}</td>
                    <td className="px-10 py-6">
@@ -403,6 +446,7 @@ export const AdminPanel: React.FC<{
                    </td>
                    <td className="px-10 py-6 text-right">
                       <div className="flex items-center justify-end gap-2">
+                         <button onClick={() => setSelectedListingId(l.id)} className="w-8 h-8 bg-blue-50 text-blue-600 rounded-lg hover:bg-blue-600 hover:text-white transition-all flex items-center justify-center" title="Manage"><i className="fas fa-cog text-[10px]"></i></button>
                          {onViewAd && <button onClick={() => onViewAd(l)} className="w-8 h-8 bg-gray-50 text-gray-400 rounded-lg hover:bg-blue-50 hover:text-blue-600 transition-all flex items-center justify-center" title="View"><i className="fas fa-eye text-[10px]"></i></button>}
                          {l.status !== ListingStatus.APPROVED && (
                            <button onClick={() => handleListingStatusUpdate(l.id, ListingStatus.APPROVED)} className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white transition-all flex items-center justify-center" title="Approve"><i className="fas fa-check text-[10px]"></i></button>
@@ -420,6 +464,111 @@ export const AdminPanel: React.FC<{
               )}
            </tbody>
         </table>
+      </div>
+    );
+  };
+
+  // Admin Module: Ad Management Detail View
+  const renderAdManagement = () => {
+    if (!detailListing) return <div className="py-20 text-center"><i className="fas fa-circle-notch fa-spin text-4xl text-blue-600"></i></div>;
+    
+    return (
+      <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+         <div className="flex items-center justify-between">
+            <button onClick={() => setSelectedListingId(null)} className="flex items-center gap-2 text-gray-400 hover:text-blue-600 font-black uppercase text-[10px] tracking-widest transition-all"><i className="fas fa-arrow-left"></i> Back to Inventory</button>
+            <div className="flex gap-3">
+               <button onClick={() => handleListingStatusUpdate(detailListing.id, ListingStatus.APPROVED)} disabled={detailListing.status === ListingStatus.APPROVED} className="px-6 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all bg-emerald-600 text-white disabled:opacity-50">Approve</button>
+               <button onClick={() => handleListingStatusUpdate(detailListing.id, ListingStatus.REJECTED)} disabled={detailListing.status === ListingStatus.REJECTED} className="px-6 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all bg-rose-600 text-white disabled:opacity-50">Reject</button>
+               <button onClick={() => handleListingDelete(detailListing.id)} className="px-6 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest transition-all bg-slate-900 text-white">Delete Ad</button>
+            </div>
+         </div>
+
+         <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm flex flex-col md:flex-row items-center gap-10">
+            <div className="w-48 h-48 rounded-[2rem] overflow-hidden bg-gray-50 border border-gray-100 flex-shrink-0">
+               <img src={detailListing.images[0]} className="w-full h-full object-cover" />
+            </div>
+            <div className="flex-1">
+               <div className="flex items-center gap-4 flex-wrap">
+                  <h2 className="text-3xl font-black text-gray-900 uppercase tracking-tight">{detailListing.title}</h2>
+                  <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest ${detailListing.status === ListingStatus.APPROVED ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>{detailListing.status}</span>
+                  {detailListing.isPremium && <span className="bg-yellow-100 text-yellow-700 px-3 py-1 rounded-lg text-[9px] font-black uppercase tracking-widest"><i className="fas fa-crown mr-1"></i> Premium</span>}
+               </div>
+               <div className="flex gap-6 mt-4 flex-wrap">
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest"><i className="fas fa-tag mr-1.5 text-blue-600"></i> {detailListing.category}</span>
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest"><i className="fas fa-location-dot mr-1.5 text-rose-500"></i> {getCityName(detailListing.cityId)}</span>
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest"><i className="fas fa-user-circle mr-1.5 text-gray-600"></i> Seller: {detailListing.sellerId}</span>
+                  <span className="text-[10px] font-black text-gray-400 uppercase tracking-widest"><i className="fas fa-eye mr-1.5 text-indigo-500"></i> {detailListing.views} Views</span>
+               </div>
+            </div>
+         </div>
+
+         <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+            <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
+               <h3 className="text-xl font-black uppercase text-gray-900 mb-8">Admin Edit: Product Information</h3>
+               <form onSubmit={handleListingUpdate} className="space-y-6">
+                  <div className="space-y-2">
+                     <label className="text-[9px] font-black uppercase text-gray-400 ml-1">Listing Title</label>
+                     <input type="text" className="w-full bg-gray-50 border p-4 rounded-xl text-sm font-bold" value={listingEditForm.title || ''} onChange={e => setListingEditForm({...listingEditForm, title: e.target.value})} />
+                  </div>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                     <div className="space-y-2">
+                        <label className="text-[9px] font-black uppercase text-gray-400 ml-1">Price (₹)</label>
+                        <input type="number" className="w-full bg-gray-50 border p-4 rounded-xl text-sm font-bold" value={listingEditForm.price || ''} onChange={e => setListingEditForm({...listingEditForm, price: Number(e.target.value)})} />
+                     </div>
+                     <div className="space-y-2">
+                        <label className="text-[9px] font-black uppercase text-gray-400 ml-1">Category</label>
+                        <select className="w-full bg-gray-50 border p-4 rounded-xl text-xs font-bold" value={listingEditForm.category} onChange={e => setListingEditForm({...listingEditForm, category: e.target.value})}>
+                           {categories.map(cat => <option key={cat.id} value={cat.name}>{cat.name}</option>)}
+                        </select>
+                     </div>
+                     <div className="space-y-2">
+                        <label className="text-[9px] font-black uppercase text-gray-400 ml-1">Product Type</label>
+                        <select className="w-full bg-gray-50 border p-4 rounded-xl text-xs font-bold" value={listingEditForm.productType || 'Universal'} onChange={e => setListingEditForm({...listingEditForm, productType: e.target.value as any})}>
+                           <option value="New">New</option>
+                           <option value="Used">Used</option>
+                           <option value="Universal">Universal</option>
+                        </select>
+                     </div>
+                  </div>
+                  <div className="space-y-2">
+                     <label className="text-[9px] font-black uppercase text-gray-400 ml-1">Product Description</label>
+                     <textarea className="w-full bg-gray-50 border p-4 rounded-xl text-sm font-bold h-40" value={listingEditForm.description || ''} onChange={e => setListingEditForm({...listingEditForm, description: e.target.value})} />
+                  </div>
+                  <button type="submit" disabled={isProcessing} className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl hover:bg-black transition-all">Update Advertisement</button>
+               </form>
+            </div>
+            
+            <div className="space-y-10">
+               <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
+                  <h3 className="text-xl font-black uppercase text-gray-900 mb-6">Moderation Controls</h3>
+                  <div className="space-y-4">
+                     <div className="p-5 rounded-2xl bg-gray-50 border border-gray-100">
+                        <p className="text-[9px] font-black uppercase text-gray-400 mb-2">Change Status Instantly</p>
+                        <div className="grid grid-cols-2 gap-3">
+                           {(['PENDING', 'APPROVED', 'REJECTED', 'DISABLED'] as ListingStatus[]).map(s => (
+                              <button key={s} onClick={() => handleListingStatusUpdate(detailListing.id, s)} className={`py-3 rounded-xl text-[8px] font-black uppercase transition-all ${detailListing.status === s ? 'bg-blue-600 text-white shadow-lg' : 'bg-white border border-gray-200 text-gray-400 hover:border-blue-500 hover:text-blue-500'}`}>{s}</button>
+                           ))}
+                        </div>
+                     </div>
+                     <div className="p-5 rounded-2xl bg-gray-50 border border-gray-100">
+                        <p className="text-[9px] font-black uppercase text-gray-400 mb-2">Visibility Settings</p>
+                        <button onClick={() => setListingEditForm({...listingEditForm, isPremium: !listingEditForm.isPremium})} className={`w-full py-4 rounded-xl text-[9px] font-black uppercase transition-all flex items-center justify-center gap-3 ${listingEditForm.isPremium ? 'bg-yellow-400 text-yellow-900' : 'bg-white border border-gray-200 text-gray-400'}`}>
+                           <i className="fas fa-crown"></i>
+                           {listingEditForm.isPremium ? 'Premium Active' : 'Make Premium'}
+                        </button>
+                     </div>
+                  </div>
+               </div>
+
+               <div className="bg-slate-900 p-10 rounded-[3rem] text-white">
+                  <h3 className="text-xl font-black uppercase mb-6">System Info</h3>
+                  <div className="space-y-4">
+                     <div><p className="text-[9px] font-black text-slate-500 uppercase">Registered On</p><p className="font-bold text-sm">{new Date(detailListing.createdAt).toLocaleString()}</p></div>
+                     <div><p className="text-[9px] font-black text-slate-500 uppercase">System ID</p><p className="font-mono text-xs text-blue-400">{detailListing.id}</p></div>
+                  </div>
+               </div>
+            </div>
+         </div>
       </div>
     );
   };
@@ -798,7 +947,7 @@ export const AdminPanel: React.FC<{
          {activeUserDetailTab === 'INVENTORY' && (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
                {detailAds.map(l => (
-                  <div key={l.id} onClick={() => onViewAd && onViewAd(l)} className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden group cursor-pointer hover:shadow-xl transition-all">
+                  <div key={l.id} onClick={() => setSelectedListingId(l.id)} className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden group cursor-pointer hover:shadow-xl transition-all">
                      <div className="aspect-square overflow-hidden relative">
                         <img src={l.images[0]} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
                         <div className="absolute top-4 left-4 flex gap-2">
@@ -1043,7 +1192,7 @@ export const AdminPanel: React.FC<{
                { id: 'REVENUE', label: 'Payments', icon: 'fa-money-bill-trend-up' },
                { id: 'SYSTEM', label: 'Settings', icon: 'fa-microchip' }
             ].map(item => (
-               <button key={item.id} onClick={() => { setActiveMenu(item.id as MainMenu); setSelectedUserId(null); }} className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeMenu === item.id ? 'bg-blue-600 text-white shadow-xl' : 'text-slate-400 hover:bg-slate-800'}`}>
+               <button key={item.id} onClick={() => { setActiveMenu(item.id as MainMenu); setSelectedUserId(null); setSelectedListingId(null); }} className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeMenu === item.id ? 'bg-blue-600 text-white shadow-xl' : 'text-slate-400 hover:bg-slate-800'}`}>
                   <i className={`fas ${item.icon} text-sm w-5`}></i> {item.label}
                </button>
             ))}
@@ -1061,6 +1210,8 @@ export const AdminPanel: React.FC<{
 
          {selectedUserId ? (
             renderUserDetail()
+         ) : selectedListingId ? (
+            renderAdManagement()
          ) : (
             <>
                <div className="flex items-center space-x-2 mb-12 bg-white p-1.5 rounded-[2.5rem] border border-gray-100 shadow-sm w-fit">
