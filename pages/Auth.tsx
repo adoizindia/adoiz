@@ -38,13 +38,13 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, onGoogleLogin, onFacebookLo
 
         if (found) {
           if (found.isSuspended) {
-            alert("This account has been suspended by the administrator.");
+            alert("This account is currently inactive. Please contact support.");
             setLoading(null);
             return;
           }
           onLogin(found);
         } else {
-          alert("Account not found. Use admin@adoiz.com or mod@adoiz.com for testing.");
+          alert("We couldn't find an account with that email. Please try admin@adoiz.com for testing.");
         }
       } else {
         const newUser = await dbService.registerUser({
@@ -60,7 +60,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, onGoogleLogin, onFacebookLo
         onLogin(newUser);
       }
     } catch (err) {
-      alert("Auth Error. Try again.");
+      alert("Something went wrong. Please try again.");
     } finally {
       setLoading(null);
     }
@@ -97,9 +97,9 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, onGoogleLogin, onFacebookLo
             <h1 className="text-4xl font-black text-white tracking-tighter">A</h1>
           </div>
           <h2 className="text-3xl font-black text-gray-900 tracking-tight">
-            {isLogin ? 'Welcome Back' : 'Join adoiz'}
+            {isLogin ? 'Welcome Back' : 'Create Account'}
           </h2>
-          <p className="text-gray-400 text-[10px] mt-2 font-black uppercase tracking-[0.3em]">Enterprise Local Marketplace</p>
+          <p className="text-gray-400 text-[10px] mt-2 font-black uppercase tracking-[0.3em]">Local Marketplace for Everyone</p>
         </div>
 
         <div className="space-y-4 pt-4">
@@ -136,7 +136,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, onGoogleLogin, onFacebookLo
 
         <div className="relative flex items-center py-4">
           <div className="flex-grow border-t border-gray-100"></div>
-          <span className="flex-shrink mx-4 text-[9px] font-black text-gray-300 uppercase tracking-[0.3em]">Secured Email Access</span>
+          <span className="flex-shrink mx-4 text-[9px] font-black text-gray-300 uppercase tracking-[0.3em]">Sign in with Email</span>
           <div className="flex-grow border-t border-gray-100"></div>
         </div>
 
@@ -146,15 +146,15 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, onGoogleLogin, onFacebookLo
               <>
                 <div className="relative group">
                    <i className="fas fa-user absolute left-5 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-blue-500 transition-colors"></i>
-                   <input type="text" required value={name} onChange={e => setName(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-12 pr-6 py-4 outline-none focus:border-blue-500 focus:bg-white transition-all text-sm font-bold" placeholder="Full Legal Name" />
+                   <input type="text" required value={name} onChange={e => setName(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-12 pr-6 py-4 outline-none focus:border-blue-500 focus:bg-white transition-all text-sm font-bold" placeholder="Your Name" />
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                    <select required value={selectedStateId} onChange={e => setSelectedStateId(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-4 outline-none focus:border-blue-500 focus:bg-white transition-all text-xs font-bold appearance-none">
-                      <option value="">Select State</option>
+                      <option value="">Choose State</option>
                       {STATES.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                    </select>
                    <select required value={selectedCityId} onChange={e => setSelectedCityId(e.target.value)} disabled={!selectedStateId} className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-4 outline-none focus:border-blue-500 focus:bg-white transition-all text-xs font-bold appearance-none disabled:opacity-50">
-                      <option value="">Select City</option>
+                      <option value="">Choose City</option>
                       {filteredCities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                    </select>
                 </div>
@@ -166,7 +166,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, onGoogleLogin, onFacebookLo
             </div>
             <div className="relative group">
                <i className="fas fa-lock absolute left-5 top-1/2 -translate-y-1/2 text-gray-300 group-focus-within:text-blue-500 transition-colors"></i>
-               <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-12 pr-6 py-4 outline-none focus:border-blue-500 focus:bg-white transition-all text-sm font-bold" placeholder="Secure Password" />
+               <input type="password" required value={password} onChange={e => setPassword(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-12 pr-6 py-4 outline-none focus:border-blue-500 focus:bg-white transition-all text-sm font-bold" placeholder="Password" />
             </div>
           </div>
           
@@ -176,7 +176,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, onGoogleLogin, onFacebookLo
             disabled={!!loading} 
             className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-xs tracking-[0.2em] shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all active:scale-[0.98] mt-4"
           >
-            {loading === 'submitting' ? <i className="fas fa-circle-notch fa-spin"></i> : (isLogin ? 'Sign In Now' : 'Initialize Account')}
+            {loading === 'submitting' ? <i className="fas fa-circle-notch fa-spin"></i> : (isLogin ? 'Sign In Now' : 'Create My Account')}
           </button>
         </form>
 
@@ -185,7 +185,7 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, onGoogleLogin, onFacebookLo
             onClick={() => setIsLogin(!isLogin)} 
             className="text-[10px] font-black text-gray-400 uppercase tracking-widest hover:text-blue-600 transition-colors"
           >
-            {isLogin ? "Don't have an account? Sign Up" : "Already a member? Sign In"}
+            {isLogin ? "New to adoiz? Sign Up" : "Already have an account? Sign In"}
           </button>
 
           <div className="flex flex-col space-y-2 w-full pt-4">

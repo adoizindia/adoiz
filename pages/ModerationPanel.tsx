@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { dbService } from '../services/dbService';
 import { Listing, ListingStatus, User, BannerAd, SupportTicket, AdReport } from '../types';
@@ -69,7 +68,7 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
     setIsProcessingAction(id);
     try {
       await dbService.updateListingStatus(id, status, undefined, user.id);
-      notify(`Ad approved successfully.`, "success");
+      notify(`Ad approved.`, "success");
       loadAllQueues(false);
     } catch (err: any) {
       notify(err.message, "error");
@@ -83,11 +82,11 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
     try {
       if (action === 'DISMISS') {
         await dbService.resolveAdReport(reportId, 'DISMISSED');
-        notify("Report dismissed.", "info");
+        notify("Report closed.", "info");
       } else {
-        await dbService.updateListingStatus(listingId, ListingStatus.REJECTED, "Violation reported by users", user.id);
+        await dbService.updateListingStatus(listingId, ListingStatus.REJECTED, "Reported by users", user.id);
         await dbService.resolveAdReport(reportId, 'RESOLVED');
-        notify("Ad removed based on report.", "error");
+        notify("Ad removed.", "error");
       }
       loadAllQueues(false);
     } catch (err: any) {
@@ -109,7 +108,7 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
     setIsProcessingAction(id);
     try {
       await dbService.adminUpdateBannerStatus(id, status, undefined, user.id);
-      notify(`Banner sponsorship ${status === 'LIVE' ? 'activated' : 'updated'}.`, "success");
+      notify(`Banner ad updated.`, "success");
       loadAllQueues(false);
     } catch (err: any) {
       notify(err.message, "error");
@@ -122,7 +121,7 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
     setIsProcessingAction(id);
     try {
       await dbService.resolveTicket(id);
-      notify("Ticket marked as resolved.", "success");
+      notify("Support query resolved.", "success");
       loadAllQueues(false);
     } catch (err: any) {
       notify(err.message, "error");
@@ -134,14 +133,14 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
   const confirmRejection = async () => {
     if (!activeItemId) return;
     setIsProcessingAction(activeItemId);
-    const finalReason = rejectionNote.trim() || 'Policy violation';
+    const finalReason = rejectionNote.trim() || 'Rules violation';
     try {
       if (rejectionType === 'AD') {
         await dbService.updateListingStatus(activeItemId, ListingStatus.REJECTED, finalReason, user.id);
       } else {
         await dbService.adminUpdateBannerStatus(activeItemId, 'REJECTED', finalReason, user.id);
       }
-      notify("Entity rejected successfully.", "error");
+      notify("Item rejected.", "error");
       setShowRejectModal(false);
       setActiveItemId(null);
       loadAllQueues(false);
@@ -159,25 +158,25 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
       <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-6">
         <div>
           <button onClick={onBack} className="text-gray-400 hover:text-blue-600 font-bold text-[10px] uppercase tracking-widest mb-4 flex items-center transition-colors">
-            <i className="fas fa-arrow-left mr-2"></i> Exit Moderation
+            <i className="fas fa-arrow-left mr-2"></i> Go Back
           </button>
           <div className="flex items-center gap-3">
-            <h1 className="text-3xl font-black text-gray-900 tracking-tight">Moderate: {managedCities.length > 0 ? managedCities.map(getCityName).join(', ') : 'Global Queue'}</h1>
-            <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[9px] font-black uppercase border border-blue-100">MODERATOR MODE</span>
+            <h1 className="text-3xl font-black text-gray-900 tracking-tight">Review List: {managedCities.length > 0 ? managedCities.map(getCityName).join(', ') : 'All Cities'}</h1>
+            <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-full text-[9px] font-black uppercase border border-blue-100">REVIEW MODE</span>
           </div>
         </div>
         <button onClick={() => loadAllQueues(false)} disabled={refreshing} className="bg-white border border-gray-200 px-6 py-3 rounded-2xl text-[10px] font-black uppercase flex items-center shadow-sm hover:shadow-md transition-all active:scale-95">
           <i className={`fas fa-sync-alt mr-2 ${refreshing ? 'fa-spin' : ''}`}></i>
-          {refreshing ? 'Refreshing...' : 'Refresh Queues'}
+          {refreshing ? 'Refreshing...' : 'Refresh List'}
         </button>
       </div>
 
       <div className="flex items-center space-x-2 mb-8 bg-white p-1.5 rounded-[2rem] border border-gray-100 shadow-sm w-fit overflow-x-auto">
         {[
-          { id: 'ADS', label: 'Inventory', count: adsQueue.length },
+          { id: 'ADS', label: 'Ads', count: adsQueue.length },
           { id: 'REPORTS', label: 'Reports', count: reportsQueue.length },
           { id: 'BANNERS', label: 'Banners', count: bannersQueue.length },
-          { id: 'TICKETS', label: 'Support', count: ticketsQueue.length }
+          { id: 'TICKETS', label: 'Queries', count: ticketsQueue.length }
         ].map(tab => (
           <button 
             key={tab.id} 
@@ -198,8 +197,8 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
             {adsQueue.length === 0 ? (
               <div className="bg-white rounded-[3rem] p-24 text-center border border-gray-100">
                 <i className="fas fa-check-circle text-4xl text-emerald-500 mb-6"></i>
-                <h3 className="text-2xl font-black text-gray-900">Inventory Clear</h3>
-                <p className="text-gray-500 mt-2">No pending ads to review.</p>
+                <h3 className="text-2xl font-black text-gray-900">All Clear</h3>
+                <p className="text-gray-500 mt-2">No pending ads to review right now.</p>
               </div>
             ) : (
               adsQueue.map(l => (
@@ -217,13 +216,12 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
                       <div className="flex flex-wrap gap-4 mt-4">
                          <span className="text-[10px] font-black uppercase text-gray-400"><i className="fas fa-tag mr-1.5 text-blue-400"></i> {l.category}</span>
                          <span className="text-[10px] font-black uppercase text-gray-400"><i className="fas fa-location-dot mr-1.5 text-rose-400"></i> {getCityName(l.cityId)}</span>
-                         <span className="text-[10px] font-black uppercase text-gray-400"><i className="fas fa-user mr-1.5 text-slate-400"></i> UID: {l.sellerId}</span>
                       </div>
                       <p className="text-sm text-gray-500 mt-4 line-clamp-2 leading-relaxed italic">"{l.description}"</p>
                     </div>
                     <div className="flex gap-3 mt-8">
-                      <button onClick={() => handleAdAction(l.id, ListingStatus.APPROVED)} disabled={isProcessingAction === l.id} className="flex-1 bg-emerald-600 text-white px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2">Authorize</button>
-                      <button onClick={() => handleAdAction(l.id, ListingStatus.REJECTED)} disabled={isProcessingAction === l.id} className="flex-1 bg-white border border-rose-100 text-rose-600 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-50 transition-all flex items-center justify-center gap-2">Reject</button>
+                      <button onClick={() => handleAdAction(l.id, ListingStatus.APPROVED)} disabled={isProcessingAction === l.id} className="flex-1 bg-emerald-600 text-white px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-lg shadow-emerald-100 hover:bg-emerald-700 transition-all flex items-center justify-center gap-2">Approve Ad</button>
+                      <button onClick={() => handleAdAction(l.id, ListingStatus.REJECTED)} disabled={isProcessingAction === l.id} className="flex-1 bg-white border border-rose-100 text-rose-600 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest hover:bg-rose-50 transition-all flex items-center justify-center gap-2">Reject Ad</button>
                     </div>
                   </div>
                 </div>
@@ -237,8 +235,8 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
             {reportsQueue.length === 0 ? (
               <div className="bg-white rounded-[3rem] p-24 text-center border border-gray-100">
                 <i className="fas fa-shield-check text-4xl text-emerald-500 mb-6"></i>
-                <h3 className="text-2xl font-black text-gray-900">Reports Clear</h3>
-                <p className="text-gray-500 mt-2">No active ad reports in your city.</p>
+                <h3 className="text-2xl font-black text-gray-900">No Reports</h3>
+                <p className="text-gray-500 mt-2">No reported ads found.</p>
               </div>
             ) : (
               reportsQueue.map(r => (
@@ -249,16 +247,15 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
                         <span className="bg-rose-50 text-rose-600 px-2 py-0.5 rounded text-[8px] font-black uppercase">{r.reason}</span>
                         <h4 className="text-lg font-black text-gray-900">Re: {r.listingTitle}</h4>
                       </div>
-                      <p className="text-sm text-gray-600 italic">"{r.details || 'No additional comments provided.'}"</p>
+                      <p className="text-sm text-gray-600 italic">"{r.details || 'No additional comments.'}"</p>
                       <div className="flex gap-4 mt-4">
-                        <span className="text-[9px] font-black uppercase text-gray-400"><i className="fas fa-user-tag mr-1"></i> Reporter: {r.reporterName}</span>
-                        <span className="text-[9px] font-black uppercase text-gray-400"><i className="fas fa-clock mr-1"></i> {new Date(r.createdAt).toLocaleString()}</span>
+                        <span className="text-[9px] font-black uppercase text-gray-400"><i className="fas fa-user-tag mr-1"></i> Reported by: {r.reporterName}</span>
                         <span className="text-[9px] font-black uppercase text-blue-500"><i className="fas fa-location-dot mr-1"></i> {getCityName(r.cityId)}</span>
                       </div>
                     </div>
                     <div className="flex md:flex-col gap-2 w-full md:w-auto">
                       <button onClick={() => handleReportAction(r.id, r.listingId, 'REMOVE_AD')} disabled={isProcessingAction === r.id} className="flex-1 bg-rose-600 text-white px-6 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-rose-100">Remove Ad</button>
-                      <button onClick={() => handleReportAction(r.id, r.listingId, 'DISMISS')} disabled={isProcessingAction === r.id} className="flex-1 bg-gray-50 text-gray-400 px-6 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-100 border border-gray-100">Dismiss</button>
+                      <button onClick={() => handleReportAction(r.id, r.listingId, 'DISMISS')} disabled={isProcessingAction === r.id} className="flex-1 bg-gray-50 text-gray-400 px-6 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-gray-100 border border-gray-100">Close</button>
                     </div>
                   </div>
                 </div>
@@ -272,27 +269,27 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
             {bannersQueue.length === 0 ? (
               <div className="bg-white rounded-[3rem] p-24 text-center border border-gray-100">
                 <i className="fas fa-rectangle-ad text-4xl text-blue-500 mb-6"></i>
-                <h3 className="text-2xl font-black text-gray-900">No Banners Pending</h3>
+                <h3 className="text-2xl font-black text-gray-900">No Banners Awaiting</h3>
               </div>
             ) : (
               bannersQueue.map(b => (
                 <div key={b.id} className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-6">
                   <div className="flex justify-between items-start">
                      <div>
-                        <h4 className="text-xl font-black text-gray-900 uppercase">{b.title || 'Untitled Campaign'}</h4>
-                        <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">City: <span className="text-blue-500">{getCityName(b.cityId)}</span> • User: {b.userId}</p>
+                        <h4 className="text-xl font-black text-gray-900 uppercase">{b.title || 'Untitled Banner'}</h4>
+                        <p className="text-[10px] text-gray-400 font-bold uppercase mt-1">City: <span className="text-blue-500">{getCityName(b.cityId)}</span></p>
                      </div>
                      <span className="bg-blue-50 text-blue-600 px-3 py-1 rounded-xl text-[9px] font-black">PENDING</span>
                   </div>
                   <div className="relative group rounded-[2rem] overflow-hidden border border-gray-100" style={{ aspectRatio: '4 / 1' }}>
                     <img src={b.imageUrl} className="w-full h-full object-cover" />
                     <div className="absolute inset-0 bg-black/5 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                       <a href={b.linkUrl} target="_blank" rel="noreferrer" className="bg-white text-gray-900 px-4 py-2 rounded-xl text-[9px] font-black uppercase shadow-xl">Test Link <i className="fas fa-external-link-alt ml-1"></i></a>
+                       <a href={b.linkUrl} target="_blank" rel="noreferrer" className="bg-white text-gray-900 px-4 py-2 rounded-xl text-[9px] font-black uppercase shadow-xl">Visit Link <i className="fas fa-external-link-alt ml-1"></i></a>
                     </div>
                   </div>
                   <div className="flex gap-3 pt-2">
-                    <button onClick={() => handleBannerAction(b.id, 'LIVE')} disabled={isProcessingAction === b.id} className="flex-1 bg-emerald-600 text-white py-4 rounded-2xl text-[10px] font-black uppercase shadow-lg shadow-emerald-100">Activate</button>
-                    <button onClick={() => handleBannerAction(b.id, 'REJECTED')} disabled={isProcessingAction === b.id} className="flex-1 bg-white border border-rose-100 text-rose-600 py-4 rounded-2xl text-[10px] font-black uppercase">Reject</button>
+                    <button onClick={() => handleBannerAction(b.id, 'LIVE')} disabled={isProcessingAction === b.id} className="flex-1 bg-emerald-600 text-white py-4 rounded-2xl text-[10px] font-black uppercase shadow-lg shadow-emerald-100">Activate Ad</button>
+                    <button onClick={() => handleBannerAction(b.id, 'REJECTED')} disabled={isProcessingAction === b.id} className="flex-1 bg-white border border-rose-100 text-rose-600 py-4 rounded-2xl text-[10px] font-black uppercase">Reject Ad</button>
                   </div>
                 </div>
               ))
@@ -305,7 +302,7 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
             {ticketsQueue.length === 0 ? (
               <div className="bg-white rounded-[3rem] p-24 text-center border border-gray-100">
                 <i className="fas fa-clipboard-check text-4xl text-emerald-500 mb-6"></i>
-                <h3 className="text-2xl font-black text-gray-900">Desk Cleared</h3>
+                <h3 className="text-2xl font-black text-gray-900">No Queries</h3>
               </div>
             ) : (
               ticketsQueue.map(t => (
@@ -317,11 +314,10 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
                     </div>
                     <p className="text-sm text-gray-600 font-medium mb-3 italic">"{t.message}"</p>
                     <div className="flex gap-4">
-                       <span className="text-[9px] font-black uppercase text-gray-400"><i className="fas fa-user-circle mr-1"></i> {t.userName}</span>
-                       <span className="text-[9px] font-black uppercase text-gray-400"><i className="fas fa-clock mr-1"></i> {new Date(t.createdAt).toLocaleString()}</span>
+                       <span className="text-[9px] font-black uppercase text-gray-400"><i className="fas fa-user-circle mr-1"></i> From: {t.userName}</span>
                     </div>
                   </div>
-                  <button onClick={() => handleTicketAction(t.id)} disabled={isProcessingAction === t.id} className="w-full md:w-auto bg-slate-900 text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl flex items-center justify-center gap-2">Resolve</button>
+                  <button onClick={() => handleTicketAction(t.id)} disabled={isProcessingAction === t.id} className="w-full md:w-auto bg-slate-900 text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl flex items-center justify-center gap-2">Mark Resolved</button>
                 </div>
               ))
             )}
@@ -333,11 +329,11 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-gray-900/60 backdrop-blur-sm animate-in fade-in">
            <div className="bg-white w-full max-w-md rounded-[2.5rem] shadow-2xl overflow-hidden animate-in zoom-in-95">
               <div className="bg-rose-600 p-8 text-white text-center">
-                <h3 className="text-2xl font-black">Reject {rejectionType === 'AD' ? 'Ad Listing' : 'Banner Ad'}</h3>
+                <h3 className="text-2xl font-black">Reject Request</h3>
               </div>
               <div className="p-10 space-y-6">
-                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Reason for review refusal</p>
-                 <textarea rows={4} className="w-full bg-gray-50 border-2 border-gray-100 p-6 rounded-3xl text-sm font-bold outline-none focus:border-rose-300 focus:bg-white transition-all" value={rejectionNote} onChange={e => setRejectionNote(e.target.value)} placeholder="e.g. Policy violation..." />
+                 <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest text-center">Please provide a reason</p>
+                 <textarea rows={4} className="w-full bg-gray-50 border-2 border-gray-100 p-6 rounded-3xl text-sm font-bold outline-none focus:border-rose-300 focus:bg-white transition-all" value={rejectionNote} onChange={e => setRejectionNote(e.target.value)} placeholder="e.g. Inappropriate content..." />
                  <button onClick={confirmRejection} disabled={isProcessingAction === activeItemId} className="w-full bg-rose-600 text-white py-5 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-rose-100 hover:bg-rose-700 transition-all flex items-center justify-center gap-2 active:scale-95">
                     Confirm Rejection
                  </button>

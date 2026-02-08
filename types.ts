@@ -1,9 +1,14 @@
-
 export enum UserRole {
   GUEST = 'GUEST',
   USER = 'USER',
   MODERATOR = 'MODERATOR',
   ADMIN = 'ADMIN'
+}
+
+export enum UserStatus {
+  ACTIVE = 'ACTIVE',
+  SUSPENDED = 'SUSPENDED',
+  BANNED = 'BANNED'
 }
 
 export enum ListingStatus {
@@ -33,67 +38,21 @@ export interface Category {
   createdAt?: string;
 }
 
-export interface SupportTicket {
+export interface SubscriptionPlan {
   id: string;
-  userId: string;
-  userName: string;
-  subject: string;
-  message: string;
-  status: 'OPEN' | 'RESOLVED';
-  createdAt: string;
+  name: string;
+  price: number;
+  durationDays: number;
+  features: string[];
+  isPopular?: boolean;
 }
 
-export interface AdReport {
-  id: string;
-  listingId: string;
-  listingTitle: string;
-  reporterId: string;
-  reporterName: string;
-  cityId: string;
-  reason: 'SPAM' | 'FRAUD' | 'MISLEADING' | 'INAPPROPRIATE' | 'OTHER';
-  details: string;
-  status: 'PENDING' | 'RESOLVED' | 'DISMISSED';
-  createdAt: string;
-}
-
-export interface BannerAd {
-  id: string;
-  userId: string;
-  cityId: string;
-  title?: string;
-  imageUrl: string;
-  linkUrl: string;
-  status: 'DRAFT' | 'PENDING' | 'LIVE' | 'REJECTED' | 'EXPIRED';
-  amountPaid: number; // Added for refund logic
-  createdAt: string;
-  startedAt?: string; // Added for live start tracking
+export interface UserSubscription {
+  planId: string;
+  planName: string;
+  activatedAt: string;
   expiresAt: string;
-  decisionAt?: string; // Added for audit
-  moderatorId?: string; // Added for audit
-  views?: number;
-  clicks?: number;
-  rejectionReason?: string;
-}
-
-export interface BackupArchive {
-  id: string;
-  filename: string;
-  size: string;
-  timestamp: string;
-  status: 'COMPLETED' | 'FAILED' | 'RESTORING';
-  type: 'AUTO' | 'MANUAL';
-  integrityVerified: boolean;
-  errorMessage?: string;
-}
-
-export interface Rating {
-  id: string;
-  fromUserId: string;
-  fromUserName: string;
-  toUserId: string;
-  score: number;
-  comment: string;
-  timestamp: string;
+  status: 'ACTIVE' | 'EXPIRED';
 }
 
 export interface SystemConfig {
@@ -117,12 +76,7 @@ export interface SystemConfig {
   };
   googleAdsenseCode: string;
   cityTierMapping: Record<string, 'T1' | 'T2' | 'T3'>;
-  cityFeatureOverrides?: Record<string, {
-    ads?: boolean;
-    banners?: boolean;
-    premiumAds?: boolean;
-    freeAds?: boolean;
-  }>;
+  subscriptionPlans: SubscriptionPlan[];
   featureToggles: {
     ads: boolean;
     banners: boolean;
@@ -133,14 +87,6 @@ export interface SystemConfig {
   };
   adminUrl: string;
   adminUsername: string;
-  adminAuth: {
-    twoFactorEnabled: boolean;
-    sessionTimeoutMinutes: number;
-    allowConcurrentSessions: boolean;
-    restrictAdminIp: boolean;
-    allowedAdminIps: string[];
-    passwordExpiryDays: number;
-  };
   branding: {
     siteTagline: string;
     footerText: string;
@@ -150,7 +96,6 @@ export interface SystemConfig {
     supportPhone: string;
     address: string;
     appName?: string;
-    splashLogo?: string;
     statusColor?: string;
     pwaIcon?: string;
     social: {
@@ -168,40 +113,13 @@ export interface SystemConfig {
   };
   paymentGateway: {
     razorpay: { active: boolean; keyId: string; keySecret: string; };
-    paypal: { active: boolean; clientId: string; secret: string; };
-    stripe: { active: boolean; publishableKey: string; secretKey: string; };
-    paytm: { active: boolean; merchantId: string; merchantKey: string; website: string; };
-    phonepe: { active: boolean; merchantId: string; saltKey: string; saltIndex: string; };
     upiId: string;
-  };
-  smsGateway: {
-    selected: 'twilio' | 'msg91' | 'textlocal';
-    twilio: { active: boolean; sid: string; authToken: string; fromNumber: string; };
-    msg91: { active: boolean; authKey: string; senderId: string; };
-    textlocal: { active: boolean; apiKey: string; sender: string; };
-  };
-  emailGateway: {
-    selected: 'sendgrid' | 'mailgun' | 'ses';
-    sendgrid: { active: boolean; apiKey: string; fromEmail: string; };
-    mailgun: { active: boolean; apiKey: string; domain: string; fromEmail: string; };
-    ses: { active: boolean; accessKey: string; secretKey: string; region: string; fromEmail: string; };
-  };
-  analytics: {
-    googleAnalyticsId: string;
-    enabled: boolean;
-  };
-  seo: {
-    enableSitemap: boolean;
-    metaTitle: string;
-    metaDescription: string;
   };
 }
 
 export interface Country { id: string; name: string; code: string; isActive?: boolean; createdAt?: string; }
 export interface State { id: string; name: string; countryId: string; isActive?: boolean; }
 export interface City { id: string; name: string; stateId: string; isActive?: boolean; }
-
-export type UserStatus = 'ACTIVE' | 'SUSPENDED' | 'BANNED';
 
 export interface User {
   id: string;
@@ -215,6 +133,7 @@ export interface User {
   address?: string;
   photo?: string;
   walletBalance: number;
+  subscription?: UserSubscription;
   managedCityIds?: string[];
   isSuspended?: boolean;
   isBanned?: boolean;
@@ -254,5 +173,51 @@ export interface WalletTransaction {
   timestamp: string;
 }
 
-export interface Message { id: string; chatId: string; senderId: string; text: string; timestamp: string; isRead: boolean; }
 export interface Chat { id: string; participants: string[]; lastMessage?: string; lastTimestamp?: string; listingId: string; unreadCount: number; otherPartyName: string; listingTitle: string; }
+export interface Message { id: string; chatId: string; senderId: string; text: string; timestamp: string; isRead: boolean; }
+
+export interface BannerAd {
+  id: string;
+  userId: string;
+  cityId: string;
+  title: string;
+  imageUrl: string;
+  linkUrl: string;
+  status: 'PENDING' | 'LIVE' | 'REJECTED';
+  createdAt: string;
+  rejectionReason?: string;
+}
+
+export interface Rating {
+  id: string;
+  fromUserId: string;
+  fromUserName: string;
+  toUserId: string;
+  score: number;
+  comment: string;
+  timestamp: string;
+}
+
+export interface AdReport {
+  id: string;
+  listingId: string;
+  listingTitle: string;
+  reporterId: string;
+  reporterName: string;
+  cityId: string;
+  reason: 'FRAUD' | 'SPAM' | 'MISLEADING' | 'INAPPROPRIATE' | 'OTHER';
+  details: string;
+  status: 'PENDING' | 'RESOLVED' | 'DISMISSED';
+  createdAt: string;
+}
+
+export interface SupportTicket {
+  id: string;
+  userId: string;
+  userName: string;
+  cityId: string;
+  subject: string;
+  message: string;
+  status: 'OPEN' | 'RESOLVED';
+  createdAt: string;
+}
