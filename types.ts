@@ -64,8 +64,12 @@ export interface BannerAd {
   imageUrl: string;
   linkUrl: string;
   status: 'DRAFT' | 'PENDING' | 'LIVE' | 'REJECTED' | 'EXPIRED';
+  amountPaid: number; // Added for refund logic
+  createdAt: string;
+  startedAt?: string; // Added for live start tracking
   expiresAt: string;
-  createdAt?: string;
+  decisionAt?: string; // Added for audit
+  moderatorId?: string; // Added for audit
   views?: number;
   clicks?: number;
   rejectionReason?: string;

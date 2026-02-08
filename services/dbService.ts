@@ -144,6 +144,39 @@ class DbService {
     seo: { enableSitemap: true, metaTitle: 'adoiz Marketplace', metaDescription: 'Local Trading Platform' }
   };
 
+  constructor() {
+    this.initMockTransactions();
+  }
+
+  private initMockTransactions() {
+    // Generate some fake revenue history based on premium listings
+    this.listings.forEach(l => {
+        if (l.isPremium) {
+            this.transactions.push({
+                id: `tx_mock_${l.id}`,
+                userId: l.sellerId,
+                amount: 500,
+                type: 'DEBIT',
+                description: `Premium Boost for Ad: ${l.title}`,
+                timestamp: l.createdAt
+            });
+        }
+    });
+    // Add some random wallet recharges
+    this.users.forEach(u => {
+        if (u.walletBalance > 0) {
+            this.transactions.push({
+                id: `tx_load_${u.id}`,
+                userId: u.id,
+                amount: u.walletBalance + 1000,
+                type: 'CREDIT',
+                description: 'Wallet Recharge',
+                timestamp: new Date(Date.now() - 10000000).toISOString()
+            });
+        }
+    });
+  }
+
   // System Config
   getSystemConfig(): SystemConfig { return this.config; }
   updateSystemConfig(newConfig: Partial<SystemConfig>): void { this.config = { ...this.config, ...newConfig }; }
@@ -215,7 +248,30 @@ class DbService {
     return this.users[idx];
   }
   async adminUpdateUser(id: string, data: Partial<User>, adminId: string): Promise<User | null> {
-    return this.updateUser(id, data);
+    const idx = this.users.findIndex(u => u.id === id);
+    if (idx === -1) return null;
+
+    // Check if suspension status is changing
+    if (data.isSuspended !== undefined && data.isSuspended !== this.users[idx].isSuspended) {
+      if (data.isSuspended) {
+        // Suspend all active listings
+        this.listings.forEach(l => {
+          if (l.sellerId === id && (l.status === ListingStatus.APPROVED || l.status === ListingStatus.PENDING)) {
+            l.status = ListingStatus.DISABLED;
+          }
+        });
+      } else {
+        // Reactivate ads
+        this.listings.forEach(l => {
+          if (l.sellerId === id && l.status === ListingStatus.DISABLED) {
+            l.status = ListingStatus.APPROVED;
+          }
+        });
+      }
+    }
+
+    this.users[idx] = { ...this.users[idx], ...data };
+    return this.users[idx];
   }
 
   // User Ratings
@@ -446,9 +502,11 @@ class DbService {
       imageUrl,
       linkUrl,
       status: 'PENDING',
-      expiresAt: new Date(Date.now() + 86400000 * this.config.bannerAdDurationDays).toISOString(),
+      createdAt: new Date().toISOString(),
+      expiresAt: new Date(Date.now() + 86400000 * this.config.bannerAdDurationDays).toISOString(), // Placeholder, updated on approval
       views: 0,
-      clicks: 0
+      clicks: 0,
+      amountPaid: price
     });
     this.transactions.push({
       id: `tx${Date.now()}`,
@@ -465,9 +523,31 @@ class DbService {
   }
   async adminUpdateBannerStatus(id: string, status: BannerAd['status'], reason?: string, adminId?: string): Promise<void> {
     const b = this.banners.find(item => item.id === id);
-    if (b) {
-      b.status = status;
-      if (reason) b.rejectionReason = reason;
+    if (!b) return;
+
+    b.status = status;
+    b.decisionAt = new Date().toISOString();
+    b.moderatorId = adminId;
+
+    if (status === 'LIVE') {
+      // Logic: Expiry starts from when it goes LIVE, not creation.
+      b.startedAt = new Date().toISOString();
+      b.expiresAt = new Date(Date.now() + 86400000 * this.config.bannerAdDurationDays).toISOString();
+    } else if (status === 'REJECTED') {
+      b.rejectionReason = reason;
+      // Refund Logic
+      const user = await this.getUserById(b.userId);
+      if (user && b.amountPaid > 0) {
+        user.walletBalance += b.amountPaid;
+        this.transactions.push({
+          id: `tx${Date.now()}`,
+          userId: user.id,
+          amount: b.amountPaid,
+          type: 'CREDIT',
+          description: `Refund: Banner Rejected (${b.title})`,
+          timestamp: new Date().toISOString()
+        });
+      }
     }
   }
 
@@ -567,6 +647,9 @@ class DbService {
   // Wallet
   async getTransactionsByUserId(userId: string): Promise<WalletTransaction[]> {
     return this.transactions.filter(tx => tx.userId === userId);
+  }
+  async getAllTransactions(): Promise<WalletTransaction[]> {
+    return this.transactions;
   }
 
   // Security Logs

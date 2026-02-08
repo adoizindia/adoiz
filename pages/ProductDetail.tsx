@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { Listing, User, BannerAd, AdReport, Rating } from '../types';
 import { dbService } from '../services/dbService';
@@ -62,7 +63,7 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
     if (banners.length <= 1) return;
     const timer = setInterval(() => {
       setCurrentBannerIndex((prev) => (prev + 1) % banners.length);
-    }, 5000);
+    }, 3000); // 3 seconds rotation
     return () => clearInterval(timer);
   }, [banners.length]);
 

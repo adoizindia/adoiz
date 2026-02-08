@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useRef } from 'react';
 import { dbService } from '../services/dbService';
 import { Listing, City, Category, BannerAd } from '../types';
@@ -29,7 +30,7 @@ export const Home: React.FC<HomeProps> = ({ city, onSearch, onCategorySelect, on
     
     const timer = setInterval(() => {
       setCurrentBannerIndex((prev) => (prev + 1) % banners.length);
-    }, 5000); // Switch every 5 seconds
+    }, 3000); // Switch every 3 seconds
 
     return () => clearInterval(timer);
   }, [banners.length]);

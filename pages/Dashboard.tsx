@@ -124,7 +124,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
       setIsProcessing('bluetick');
       try {
         const updated = await dbService.activateBlueTick(user.id);
-        if (updated && onUpdateUser) onUpdateUser(updated);
+        if (updated && onUpdateUser) {
+            // Important: Pass a new object reference to ensure React re-renders
+            onUpdateUser({ ...updated });
+        }
         notify("Blue Tick activated! Profile badge updated.", "success");
         loadDashboardData();
       } catch (err: any) {
@@ -254,6 +257,17 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <button onClick={() => setShowRechargeModal(true)} className="bg-blue-600 text-white px-8 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center gap-3 cursor-pointer hover:bg-blue-700 active:scale-95 transition-all">
                 <i className="fas fa-wallet"></i> Wallet: ₹{user.walletBalance.toLocaleString()}
               </button>
+
+              {!user.isVerified && config.blueTickEnabled && (
+                <button 
+                  onClick={handleActivateBlueTick}
+                  disabled={isProcessing === 'bluetick'}
+                  className="bg-sky-500 text-white px-8 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl flex items-center gap-2 cursor-pointer hover:bg-sky-600 active:scale-95 transition-all"
+                >
+                  {isProcessing === 'bluetick' ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-check-circle"></i>} 
+                  Get Verified (₹{config.blueTickPrice})
+                </button>
+              )}
               
               {user.role === UserRole.ADMIN && <button onClick={onAdminPanel} className="bg-slate-900 text-white px-8 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl cursor-pointer hover:bg-black active:scale-95 transition-all">Admin Panel</button>}
               

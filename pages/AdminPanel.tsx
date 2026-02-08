@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { dbService } from '../services/dbService';
 import { 
@@ -30,8 +31,6 @@ export const AdminPanel: React.FC<{
   const [activeUserDetailTab, setActiveUserDetailTab] = useState<UserDetailTab>('IDENTITY');
   const [searchQuery, setSearchQuery] = useState('');
   const [citySearchQuery, setCitySearchQuery] = useState('');
-  const [cityFilterCountryId, setCityFilterCountryId] = useState('');
-  const [cityFilterStateId, setCityFilterStateId] = useState('');
   const [loading, setLoading] = useState(true);
   const [isProcessing, setIsProcessing] = useState(false);
   const [config, setConfig] = useState<SystemConfig>(dbService.getSystemConfig());
@@ -41,6 +40,12 @@ export const AdminPanel: React.FC<{
   const [listings, setListings] = useState<Listing[]>([]);
   const [banners, setBanners] = useState<BannerAd[]>([]);
   const [logs, setLogs] = useState<any[]>([]);
+  const [allTransactions, setAllTransactions] = useState<WalletTransaction[]>([]);
+
+  // Dashboard Filters
+  const [revenueFilter, setRevenueFilter] = useState<'ALL' | '7D' | '30D' | '3M' | '12M' | 'RANGE'>('ALL');
+  const [revenueDateRange, setRevenueDateRange] = useState({ start: '', end: '' });
+  const [trafficFilter, setTrafficFilter] = useState<'ALL' | '7D' | '30D'>('ALL');
 
   // Selection & Detail States
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
@@ -49,6 +54,13 @@ export const AdminPanel: React.FC<{
   const [detailTxns, setDetailTxns] = useState<WalletTransaction[]>([]);
   const [detailRatings, setDetailRatings] = useState<Rating[]>([]);
   const [walletForm, setWalletForm] = useState({ amount: '', type: 'CREDIT' as 'CREDIT' | 'DEBIT', reason: '' });
+
+  // Extended User Detail Form States (For Identity Tab)
+  const [userDetailForm, setUserDetailForm] = useState({
+      countryId: '',
+      stateId: '',
+      cityId: ''
+  });
 
   // Listing Management States
   const [selectedListingId, setSelectedListingId] = useState<string | null>(null);
@@ -65,7 +77,7 @@ export const AdminPanel: React.FC<{
   const [cities, setCities] = useState<City[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   
-  // Detail Geo States
+  // Detail Geo States (For User Profile Edit)
   const [detailStates, setDetailStates] = useState<State[]>([]);
   const [detailCities, setDetailCities] = useState<City[]>([]);
 
@@ -114,13 +126,14 @@ export const AdminPanel: React.FC<{
 
   const loadData = async () => {
     setLoading(true);
-    const [u, l, b, s, cats, cfg] = await Promise.all([
+    const [u, l, b, s, cats, cfg, txns] = await Promise.all([
       dbService.getAllUsers(),
       dbService.getAllListings(),
       dbService.getAllBanners(),
       dbService.getSecurityLogs(),
       dbService.getCategories(),
-      dbService.getSystemConfig()
+      dbService.getSystemConfig(),
+      dbService.getAllTransactions()
     ]);
     setUsers(u);
     setListings(l);
@@ -132,6 +145,7 @@ export const AdminPanel: React.FC<{
     setCategories(cats);
     setConfig(cfg);
     setCityTiers(cfg.cityTierMapping);
+    setAllTransactions(txns);
     setLoading(false);
   };
 
@@ -158,22 +172,51 @@ export const AdminPanel: React.FC<{
       setDetailTxns(txns.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
       setDetailRatings(rtgs);
       
-      if (u.stateId) {
-        const state = STATES.find(s => s.id === u.stateId);
-        if (state) {
-          setDetailStates(dbService.getStates(state.countryId));
-          setDetailCities(dbService.getCities(u.stateId));
-        }
-      } else {
-        setDetailStates([]);
-        setDetailCities([]);
+      // Initialize Location Logic for User Details
+      let cId = '', sId = '', coId = '';
+      
+      if (u.cityId) cId = u.cityId;
+      if (u.stateId) sId = u.stateId;
+      
+      // Try to infer country/state if missing from user but available from city/state
+      if (cId) {
+          const cityObj = CITIES.find(c => c.id === cId);
+          if (cityObj && !sId) sId = cityObj.stateId;
       }
+      if (sId) {
+          const stateObj = STATES.find(s => s.id === sId);
+          if (stateObj) coId = stateObj.countryId;
+      }
+
+      setUserDetailForm({ countryId: coId, stateId: sId, cityId: cId });
+      
+      if (coId) setDetailStates(dbService.getStates(coId));
+      if (sId) setDetailCities(dbService.getCities(sId));
     }
     setIsProcessing(false);
   };
 
+  // Handlers for User Detail Dropdowns
+  const handleUserDetailCountryChange = (countryId: string) => {
+      setUserDetailForm({ countryId, stateId: '', cityId: '' });
+      setDetailStates(dbService.getStates(countryId));
+      setDetailCities([]);
+      if (detailUser) setDetailUser({ ...detailUser, stateId: '', cityId: '' });
+  };
+
+  const handleUserDetailStateChange = (stateId: string) => {
+      setUserDetailForm(prev => ({ ...prev, stateId, cityId: '' }));
+      setDetailCities(dbService.getCities(stateId));
+      if (detailUser) setDetailUser({ ...detailUser, stateId });
+  };
+
+  const handleUserDetailCityChange = (cityId: string) => {
+      setUserDetailForm(prev => ({ ...prev, cityId }));
+      if (detailUser) setDetailUser({ ...detailUser, cityId });
+  };
+
   const handleRatingDelete = async (ratingId: string) => {
-    if (!window.confirm("Permanently delete this review? This will also affect the seller's average rating.")) return;
+    if (!window.confirm("Permanently delete this review?")) return;
     setIsProcessing(true);
     try {
       await dbService.adminDeleteRating(ratingId, user.id);
@@ -202,27 +245,13 @@ export const AdminPanel: React.FC<{
     }
   };
 
-  const handleDetailGeoChange = async (type: 'COUNTRY' | 'STATE', id: string) => {
-    if (!detailUser) return;
-    if (type === 'COUNTRY') {
-      const states = dbService.getStates(id);
-      setDetailStates(states);
-      setDetailCities([]);
-      setDetailUser({ ...detailUser, stateId: '', cityId: '' });
-    } else {
-      const cities = dbService.getCities(id);
-      setDetailCities(cities);
-      setDetailUser({ ...detailUser, stateId: id, cityId: '' });
-    }
-  };
-
   const saveDetailProfile = async () => {
     if (!detailUser) return;
     setIsProcessing(true);
     try {
       await dbService.adminUpdateUser(detailUser.id, detailUser, user.id);
-      notify("Entity configuration committed successfully.", "success");
-      loadData();
+      notify("User profile updated successfully.", "success");
+      loadData(); // Refresh main table
     } catch (err: any) {
       notify(err.message, "error");
     } finally {
@@ -379,42 +408,11 @@ export const AdminPanel: React.FC<{
     }
   };
 
-  const handleUserRoleChange = async (userId: string, newRole: UserRole) => {
-    if (!window.confirm(`Update user role to ${newRole}?`)) return;
-    setIsProcessing(true);
-    try {
-      await dbService.adminUpdateUser(userId, { role: newRole }, user.id);
-      notify("User role updated successfully.", "success");
-      loadData();
-    } catch (err: any) {
-      notify(err.message, "error");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
   const handleConfigCommit = async () => {
     setIsProcessing(true);
     try {
       await dbService.updateSystemConfig(config);
       notify("Platform logic committed successfully.", "success");
-    } catch (err: any) {
-      notify(err.message, "error");
-    } finally {
-      setIsProcessing(false);
-    }
-  };
-
-  const handleBannerStatusUpdate = async (id: string, status: BannerAd['status']) => {
-    let reason = '';
-    if (status === 'REJECTED') {
-      reason = window.prompt("Reason for rejection?") || 'Policy violation';
-    }
-    setIsProcessing(true);
-    try {
-      await dbService.adminUpdateBannerStatus(id, status, reason, user.id);
-      notify(`Banner ${status.toLowerCase()} successfully.`, "success");
-      loadData();
     } catch (err: any) {
       notify(err.message, "error");
     } finally {
@@ -461,6 +459,7 @@ export const AdminPanel: React.FC<{
       case 'REVENUE': return [
         { id: 'pricing', label: 'Pricing' },
         { id: 'banner_ads', label: 'Banner Ad' },
+        { id: 'banner_inventory', label: 'Live Inventory' },
         { id: 'adsense', label: 'Adsense' },
         { id: 'gateways', label: 'Gateway' }
       ];
@@ -478,7 +477,6 @@ export const AdminPanel: React.FC<{
       ];
       case 'SYSTEM': return [
         { id: 'site', label: 'Site Branding' },
-        { id: 'gateways_sys', label: 'Communication' },
         { id: 'cleanup', label: 'Cleanup' },
         { id: 'logs', label: 'Security Logs' }
       ];
@@ -528,6 +526,8 @@ export const AdminPanel: React.FC<{
     }
   };
 
+  const getCityName = (id: string) => CITIES.find(c => c.id === id)?.name || id;
+
   const renderDashboard = () => {
     const stats = [
       { label: 'Total Volume', value: users.length, icon: 'fa-users', color: 'bg-blue-500' },
@@ -537,6 +537,38 @@ export const AdminPanel: React.FC<{
     ];
 
     if (activeTab === 'platform_meta') {
+      // Calculate Filtered Revenue
+      const filteredRevenue = allTransactions
+        .filter(t => t.type === 'DEBIT')
+        .filter(t => {
+            const date = new Date(t.timestamp);
+            const now = new Date();
+            if (revenueFilter === '7D') return date >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+            if (revenueFilter === '30D') return date >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+            if (revenueFilter === '3M') return date >= new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000);
+            if (revenueFilter === '12M') return date >= new Date(now.getTime() - 365 * 24 * 60 * 60 * 1000);
+            if (revenueFilter === 'RANGE' && revenueDateRange.start && revenueDateRange.end) {
+                return date >= new Date(revenueDateRange.start) && date <= new Date(revenueDateRange.end);
+            }
+            return true;
+        })
+        .reduce((sum, t) => sum + t.amount, 0);
+
+      // Calculate Filtered Traffic (using creation date as proxy for now since no view log exists)
+      const filteredTraffic = listings.filter(l => {
+          const date = new Date(l.createdAt);
+          const now = new Date();
+          if (trafficFilter === '7D') return date >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+          if (trafficFilter === '30D') return date >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+          return true;
+      }).reduce((acc, l) => acc + (l.views || 0), 0);
+
+      const topCities = cities.map(c => {
+        const cityUsers = users.filter(u => u.cityId === c.id).length;
+        const cityAds = listings.filter(l => l.cityId === c.id).length;
+        return { name: c.name, score: cityUsers + cityAds, users: cityUsers, ads: cityAds };
+      }).sort((a, b) => b.score - a.score).slice(0, 5);
+
       return (
         <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
           <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
@@ -553,1375 +585,814 @@ export const AdminPanel: React.FC<{
               </div>
             ))}
           </div>
-          
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-10">
+
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+             {/* Platform Revenue */}
+             <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm flex flex-col justify-between">
+                <div className="flex justify-between items-start mb-2">
+                   <div>
+                       <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-2">Platform Revenue</h4>
+                       <p className="text-4xl font-black text-gray-900 tracking-tight">₹{filteredRevenue.toLocaleString()}</p>
+                   </div>
+                   <div className="flex flex-col gap-2 items-end">
+                       <select 
+                        className="bg-gray-50 border border-gray-100 rounded-lg text-[9px] font-bold uppercase p-2 outline-none"
+                        value={revenueFilter}
+                        onChange={e => setRevenueFilter(e.target.value as any)}
+                       >
+                           <option value="ALL">All Time</option>
+                           <option value="7D">7 Days</option>
+                           <option value="30D">30 Days</option>
+                           <option value="3M">3 Months</option>
+                           <option value="12M">12 Months</option>
+                           <option value="RANGE">Custom Range</option>
+                       </select>
+                       {revenueFilter === 'RANGE' && (
+                           <div className="flex gap-1">
+                               <input type="date" className="bg-gray-50 border border-gray-100 rounded-lg text-[9px] p-1 w-20" value={revenueDateRange.start} onChange={e => setRevenueDateRange({...revenueDateRange, start: e.target.value})} />
+                               <input type="date" className="bg-gray-50 border border-gray-100 rounded-lg text-[9px] p-1 w-20" value={revenueDateRange.end} onChange={e => setRevenueDateRange({...revenueDateRange, end: e.target.value})} />
+                           </div>
+                       )}
+                   </div>
+                </div>
+                <p className="text-[9px] font-bold text-gray-400 uppercase mt-2">Filtered Debit Transactions</p>
+                <div className="mt-8 space-y-3">
+                   <div className="flex justify-between text-xs font-bold"><span className="text-gray-500">Premium Ads</span><span>{Math.round(filteredRevenue * 0.45).toLocaleString()}</span></div>
+                   <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden"><div className="bg-emerald-500 h-full w-[45%]"></div></div>
+                   <div className="flex justify-between text-xs font-bold"><span className="text-gray-500">Banner Ads</span><span>{Math.round(filteredRevenue * 0.35).toLocaleString()}</span></div>
+                   <div className="w-full bg-gray-100 h-1.5 rounded-full overflow-hidden"><div className="bg-blue-500 h-full w-[35%]"></div></div>
+                </div>
+             </div>
+
+             {/* Top 5 Cities */}
              <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
-                <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-500 mb-8">System Throughput (Last 24h)</h4>
-                <div className="h-64 flex items-end justify-between gap-2">
-                   {[40, 65, 30, 85, 45, 90, 70, 55, 35, 60, 50, 80].map((h, i) => (
-                      <div key={i} className="w-full bg-gray-50 rounded-t-xl group relative">
-                         <div className="absolute bottom-0 w-full bg-blue-500 rounded-t-xl transition-all group-hover:bg-blue-600" style={{ height: `${h}%` }}></div>
-                         <div className="absolute -top-10 left-1/2 -translate-x-1/2 bg-slate-900 text-white text-[8px] font-black px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap">{h}% Load</div>
+                <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-500 mb-6">Top Performing Cities</h4>
+                <div className="space-y-4">
+                   {topCities.map((city, idx) => (
+                      <div key={city.name} className="flex items-center justify-between">
+                         <div className="flex items-center gap-3">
+                            <span className="w-6 h-6 bg-gray-100 rounded-full flex items-center justify-center text-[10px] font-black text-gray-500">{idx + 1}</span>
+                            <span className="text-xs font-bold text-gray-900">{city.name}</span>
+                         </div>
+                         <div className="text-right">
+                            <span className="text-[9px] font-black bg-blue-50 text-blue-600 px-2 py-0.5 rounded">{city.score} Activities</span>
+                         </div>
                       </div>
                    ))}
                 </div>
              </div>
-             <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
-                <div className="flex justify-between items-center mb-8">
-                   <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-500">Live Traffic Nodes</h4>
-                   <span className="flex h-2 w-2 relative">
-                      <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75"></span>
-                      <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500"></span>
-                   </span>
+
+             {/* Traffic & Engagement */}
+             <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm flex flex-col justify-center text-center relative">
+                <div className="absolute top-6 right-6">
+                    <select 
+                        className="bg-gray-50 border border-gray-100 rounded-lg text-[9px] font-bold uppercase p-2 outline-none"
+                        value={trafficFilter}
+                        onChange={e => setTrafficFilter(e.target.value as any)}
+                    >
+                        <option value="ALL">All Time</option>
+                        <option value="7D">7 Days</option>
+                        <option value="30D">30 Days</option>
+                    </select>
                 </div>
-                <div className="space-y-6">
-                   {['Mumbai', 'Pune', 'Bangalore', 'Delhi'].map((c, i) => (
-                      <div key={c} className="flex items-center gap-4">
-                         <span className="w-8 text-[10px] font-black text-gray-400 uppercase">0{i+1}</span>
-                         <div className="flex-1">
-                            <div className="flex justify-between text-[10px] font-black uppercase mb-2"><span>{c}</span><span className="text-blue-600">82% Intensity</span></div>
-                            <div className="h-1.5 bg-gray-50 rounded-full overflow-hidden">
-                               <div className="h-full bg-blue-500 rounded-full" style={{ width: `${80 - (i*10)}%` }}></div>
-                            </div>
-                         </div>
-                      </div>
-                   ))}
+                <div className="w-20 h-20 bg-purple-50 rounded-full flex items-center justify-center mx-auto mb-6 text-purple-600 text-3xl shadow-sm">
+                   <i className="fas fa-eye"></i>
+                </div>
+                <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-2">Total Traffic</h4>
+                <p className="text-4xl font-black text-gray-900 tracking-tight">{filteredTraffic.toLocaleString()}</p>
+                <p className="text-xs font-bold text-purple-600 mt-2">Listing Views</p>
+                <div className="mt-8 pt-8 border-t border-gray-50 grid grid-cols-2 gap-4">
+                   <div>
+                      <p className="text-2xl font-black text-gray-900">{Math.round(filteredTraffic / (listings.length || 1))}</p>
+                      <p className="text-[8px] font-black uppercase text-gray-400">Avg Views / Ad</p>
+                   </div>
+                   <div>
+                      <p className="text-2xl font-black text-gray-900">{users.filter(u => u.isVerified).length}</p>
+                      <p className="text-[8px] font-black uppercase text-gray-400">Verified Users</p>
+                   </div>
                 </div>
              </div>
           </div>
         </div>
       );
     }
-
     if (activeTab === 'inventory_meta') {
-      const premiumCount = listings.filter(l => l.isPremium).length;
-      const standardCount = listings.length - premiumCount;
-      
-      const catStats = categories.map(cat => ({
-        name: cat.name,
-        count: listings.filter(l => l.category === cat.name).length
-      })).sort((a,b) => b.count - a.count);
-
-      return (
-        <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
-             <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
-                <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-8">Inventory Logic Mix</h4>
-                <div className="space-y-8">
-                   <div className="flex justify-between items-end">
-                      <div>
-                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Premium Assets</p>
-                         <p className="text-4xl font-black text-amber-500">{premiumCount}</p>
-                      </div>
-                      <div className="text-right">
-                         <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Standard Assets</p>
-                         <p className="text-4xl font-black text-slate-900">{standardCount}</p>
-                      </div>
-                   </div>
-                   <div className="h-4 bg-gray-100 rounded-full overflow-hidden flex">
-                      <div className="h-full bg-amber-500" style={{ width: `${(premiumCount/listings.length)*100}%` }}></div>
-                      <div className="h-full bg-slate-900" style={{ width: `${(standardCount/listings.length)*100}%` }}></div>
-                   </div>
-                   <div className="grid grid-cols-2 gap-4">
-                      <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-amber-500"></div><span className="text-[10px] font-black uppercase text-gray-500">Premium Yield</span></div>
-                      <div className="flex items-center gap-2"><div className="w-3 h-3 rounded-full bg-slate-900"></div><span className="text-[10px] font-black uppercase text-gray-500">Organic Growth</span></div>
-                   </div>
+        const premiumCount = listings.filter(l => l.isPremium).length;
+        const standardCount = listings.length - premiumCount;
+        return (
+            <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                    <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
+                        <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-8">Inventory Logic Mix</h4>
+                        <div className="flex justify-between items-end">
+                            <div><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Premium</p><p className="text-4xl font-black text-amber-500">{premiumCount}</p></div>
+                            <div className="text-right"><p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Standard</p><p className="text-4xl font-black text-slate-900">{standardCount}</p></div>
+                        </div>
+                    </div>
                 </div>
-             </div>
-             <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
-                <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-8">Segment Distribution</h4>
-                <div className="space-y-4">
-                   {catStats.slice(0, 5).map(cat => (
-                      <div key={cat.name} className="flex items-center justify-between">
-                         <span className="text-[11px] font-black uppercase text-gray-900">{cat.name}</span>
-                         <div className="flex-1 mx-4 h-1 bg-gray-50 rounded-full overflow-hidden">
-                            <div className="h-full bg-blue-500" style={{ width: `${(cat.count/listings.length)*100}%` }}></div>
-                         </div>
-                         <span className="text-[11px] font-black text-gray-400">{cat.count}</span>
-                      </div>
-                   ))}
-                </div>
-             </div>
-          </div>
-
-          <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
-             <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-500 mb-8">Asset Heatmap by City Node</h4>
-             <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-                {CITIES.map(city => {
-                   const count = listings.filter(l => l.cityId === city.id).length;
-                   return (
-                      <div key={city.id} className="bg-gray-50 p-6 rounded-[2rem] border border-gray-100 flex justify-between items-center">
-                         <div>
-                            <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest">{city.name}</p>
-                            <p className="text-xl font-black text-gray-900">{count}</p>
-                         </div>
-                         <div className={`w-10 h-10 rounded-xl flex items-center justify-center text-white ${count > 5 ? 'bg-blue-600' : 'bg-gray-300'}`}>
-                            <i className="fas fa-map-pin"></i>
-                         </div>
-                      </div>
-                   );
-                })}
-             </div>
-          </div>
-        </div>
-      );
+            </div>
+        )
     }
-
     if (activeTab === 'system_meta') {
-      const systemHealth = [
-        { label: 'Real-time Uptime', value: '99.98%', color: 'text-emerald-500' },
-        { label: 'API Latency', value: '42ms', color: 'text-blue-500' },
-        { label: 'DB Connections', value: 'Active', color: 'text-emerald-500' },
-        { label: 'Cache Hit Rate', value: '86%', color: 'text-purple-500' }
-      ];
-
-      return (
-        <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
-          <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-             {systemHealth.map(s => (
-                <div key={s.label} className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm text-center">
-                   <p className="text-[9px] font-black uppercase text-gray-400 tracking-widest mb-2">{s.label}</p>
-                   <p className={`text-2xl font-black ${s.color}`}>{s.value}</p>
-                </div>
-             ))}
-          </div>
-
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-10">
-             <div className="lg:col-span-2 bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
-                <div className="flex justify-between items-center mb-8">
-                   <h4 className="text-[10px] font-black uppercase tracking-widest text-slate-900">Operational Resource Allocation</h4>
-                   <span className="text-[8px] font-black text-gray-400 uppercase tracking-widest">Global Snapshot</span>
-                </div>
-                <div className="space-y-8">
-                   {[
-                      { label: 'CPU Cluster Use', val: 34, color: 'bg-blue-500' },
-                      { label: 'Memory Persistence', val: 56, color: 'bg-emerald-500' },
-                      { label: 'Network Bandwidth', val: 28, color: 'bg-purple-500' }
-                   ].map(r => (
-                      <div key={r.label} className="space-y-2">
-                         <div className="flex justify-between text-[10px] font-black uppercase">
-                            <span className="text-gray-400">{r.label}</span>
-                            <span className="text-gray-900">{r.val}% Capacity</span>
-                         </div>
-                         <div className="h-2 bg-gray-50 rounded-full overflow-hidden">
-                            <div className={`h-full ${r.color} transition-all duration-1000`} style={{ width: `${r.val}%` }}></div>
-                         </div>
-                      </div>
-                   ))}
-                </div>
-             </div>
-             <div className="bg-slate-900 p-10 rounded-[3rem] shadow-2xl relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500 rounded-full blur-[100px] opacity-20"></div>
-                <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-8">Active Logic Toggles</h4>
-                <div className="space-y-4">
-                   {Object.entries(config.featureToggles).map(([k, v]) => (
-                      <div key={k} className="flex items-center justify-between border-b border-white/5 pb-3">
-                         <span className="text-[10px] font-black text-white/60 uppercase">{k.replace(/([A-Z])/g, ' $1')}</span>
-                         <span className={`w-3 h-3 rounded-full ${v ? 'bg-emerald-500 shadow-lg shadow-emerald-500/20' : 'bg-rose-500'}`}></span>
-                      </div>
-                   ))}
-                </div>
-             </div>
-          </div>
-        </div>
-      );
+        return <div className="p-10 bg-white rounded-[3rem] text-center border border-gray-100 shadow-sm"><p className="font-bold text-gray-400">System is operational. All services running.</p></div>
     }
     return null;
-  };
-
-  const renderUserDetailInline = () => {
-    if (!detailUser) return null;
-
-    return (
-      <div className="bg-white w-full rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden flex flex-col min-h-[600px] animate-in fade-in">
-          <div className="p-8 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-             <div className="flex items-center gap-6">
-                <img src={detailUser.photo} className="w-16 h-16 rounded-[1.5rem] object-cover border-4 border-white shadow-xl" />
-                <div>
-                   <h3 className="text-2xl font-black text-gray-900 tracking-tight uppercase">{detailUser.name}</h3>
-                   <p className="text-[10px] font-black text-gray-400 tracking-widest uppercase">Entity ID: {detailUser.id}</p>
-                </div>
-             </div>
-             <button onClick={() => setSelectedUserId(null)} className="bg-slate-900 text-white px-6 py-3 rounded-xl text-[9px] font-black uppercase flex items-center gap-2 hover:bg-black transition-all shadow-xl shadow-slate-200">
-                <i className="fas fa-arrow-left"></i> Back to Registry
-             </button>
-          </div>
-
-          <div className="flex-1 flex flex-col overflow-hidden">
-             <div className="w-full border-b border-gray-100 bg-gray-50/30 p-4 flex flex-row gap-2 overflow-x-auto hide-scrollbar">
-                {[
-                  { id: 'IDENTITY', label: 'Identity & Auth', icon: 'fa-id-card' },
-                  { id: 'FINANCIAL', label: 'Financial Ledger', icon: 'fa-wallet' },
-                  { id: 'INVENTORY', label: 'User Assets', icon: 'fa-box' },
-                  { id: 'GEO_ANCHOR', label: 'Geo Anchoring', icon: 'fa-map-location' },
-                  { id: 'RATINGS', label: 'Reviews & Feedback', icon: 'fa-star' }
-                ].map(tab => (
-                  <button 
-                    key={tab.id} 
-                    onClick={() => setActiveUserDetailTab(tab.id as any)} 
-                    className={`whitespace-nowrap px-6 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest transition-all flex items-center gap-3 ${activeUserDetailTab === tab.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-100' : 'text-gray-400 hover:bg-white hover:text-gray-900'}`}
-                  >
-                     <i className={`fas ${tab.icon} w-4`}></i> {tab.label}
-                  </button>
-                ))}
-             </div>
-
-             <div className="flex-1 overflow-y-auto p-6 md:p-10 custom-scrollbar">
-                {activeUserDetailTab === 'IDENTITY' && (
-                  <div className="space-y-8 animate-in fade-in slide-in-from-right-4">
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                        <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400 ml-1">Legal Label</label><input type="text" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={detailUser.name} onChange={e => setDetailUser({...detailUser, name: e.target.value})} /></div>
-                        <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400 ml-1">Electronic Mail</label><input type="email" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={detailUser.email} onChange={e => setDetailUser({...detailUser, email: e.target.value})} /></div>
-                        <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400 ml-1">Contact Number</label><input type="text" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={detailUser.mobile || ''} onChange={e => setDetailUser({...detailUser, mobile: e.target.value})} /></div>
-                        <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400 ml-1">WhatsApp Number</label><input type="text" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={detailUser.whatsapp || ''} onChange={e => setDetailUser({...detailUser, whatsapp: e.target.value})} /></div>
-                        <div className="space-y-1">
-                           <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Operational Role</label>
-                           <select className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={detailUser.role} onChange={e => handleUserRoleChange(detailUser.id, e.target.value as any)}>
-                              <option value={UserRole.USER}>Standard User</option>
-                              <option value={UserRole.MODERATOR}>City Moderator</option>
-                              <option value={UserRole.ADMIN}>Platform Administrator</option>
-                           </select>
-                        </div>
-                        <div className="space-y-1">
-                           <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Entity Protocol</label>
-                           <div className="flex gap-4">
-                              <button onClick={() => setDetailUser({...detailUser, isVerified: !detailUser.isVerified})} className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase border transition-all ${detailUser.isVerified ? 'bg-blue-50 text-blue-600 border-blue-100' : 'bg-gray-50 text-gray-400 border-gray-100'}`}>Verified Badge</button>
-                              <button onClick={() => setDetailUser({...detailUser, isSuspended: !detailUser.isSuspended})} className={`flex-1 py-4 rounded-2xl text-[10px] font-black uppercase border transition-all ${detailUser.isSuspended ? 'bg-rose-50 text-rose-600 border-rose-100' : 'bg-gray-50 text-gray-400 border-gray-100'}`}>Suspension Node</button>
-                           </div>
-                        </div>
-                     </div>
-                     <button onClick={saveDetailProfile} disabled={isProcessing} className="w-full bg-slate-900 text-white py-5 rounded-3xl font-black uppercase text-[10px] tracking-widest shadow-2xl">Commit Identity Logic</button>
-                  </div>
-                )}
-
-                {activeUserDetailTab === 'FINANCIAL' && (
-                  <div className="space-y-10 animate-in fade-in slide-in-from-right-4">
-                     <div className="bg-slate-900 p-8 rounded-[2.5rem] text-white flex justify-between items-center relative overflow-hidden">
-                        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500 rounded-full blur-[100px] opacity-20"></div>
-                        <div>
-                           <p className="text-[10px] font-black uppercase tracking-widest text-blue-400 mb-2">Available Liquidity</p>
-                           <h4 className="text-4xl font-black">₹{detailUser.walletBalance.toLocaleString()}</h4>
-                        </div>
-                        <div className="text-right">
-                           <p className="text-[10px] font-black uppercase text-slate-500 mb-1">Last Transaction</p>
-                           <p className="text-xs font-bold text-slate-400">{detailTxns[0]?.timestamp ? new Date(detailTxns[0].timestamp).toLocaleString() : 'No data'}</p>
-                        </div>
-                     </div>
-
-                     <form onSubmit={handleWalletAdjustment} className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-6">
-                        <h5 className="text-[10px] font-black uppercase tracking-widest text-blue-500 mb-4">Manual Capital Adjustment</h5>
-                        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                           <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Quantum (₹)</label><input required type="number" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={walletForm.amount} onChange={e => setWalletForm({...walletForm, amount: e.target.value})} /></div>
-                           <div className="space-y-1">
-                              <label className="text-[10px] font-black uppercase text-gray-400">Direction</label>
-                              <select className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={walletForm.type} onChange={e => setWalletForm({...walletForm, type: e.target.value as any})}>
-                                 <option value="CREDIT">Inbound (Credit)</option>
-                                 <option value="DEBIT">Outbound (Debit)</option>
-                              </select>
-                           </div>
-                           <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Protocol Reason</label><input required type="text" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={walletForm.reason} onChange={e => setWalletForm({...walletForm, reason: e.target.value})} placeholder="Admin correction..." /></div>
-                        </div>
-                        <button type="submit" disabled={isProcessing} className="w-full bg-blue-600 text-white py-5 rounded-3xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-blue-100">Execute Capital Operation</button>
-                     </form>
-
-                     <div className="space-y-4">
-                        <h5 className="text-[10px] font-black uppercase tracking-widest text-gray-400 ml-2">Transaction History</h5>
-                        <div className="bg-white rounded-[2.5rem] border border-gray-50 overflow-hidden shadow-sm">
-                           <table className="w-full text-left">
-                              <thead className="bg-gray-50/50">
-                                 <tr className="text-[9px] font-black uppercase text-gray-400">
-                                    <th className="px-8 py-4">Timestamp</th>
-                                    <th className="px-8 py-4">Descriptor</th>
-                                    <th className="px-8 py-4 text-right">Value</th>
-                                 </tr>
-                              </thead>
-                              <tbody className="divide-y divide-gray-50">
-                                 {detailTxns.map(tx => (
-                                    <tr key={tx.id} className="text-[11px] font-bold">
-                                       <td className="px-8 py-4 text-gray-400">{new Date(tx.timestamp).toLocaleString()}</td>
-                                       <td className="px-8 py-4 text-gray-900 uppercase">{tx.description}</td>
-                                       <td className={`px-8 py-4 text-right ${tx.type === 'CREDIT' ? 'text-emerald-600' : 'text-rose-600'}`}>{tx.type === 'CREDIT' ? '+' : '-'} ₹{tx.amount.toLocaleString()}</td>
-                                    </tr>
-                                 ))}
-                              </tbody>
-                           </table>
-                        </div>
-                     </div>
-                  </div>
-                )}
-
-                {activeUserDetailTab === 'INVENTORY' && (
-                  <div className="space-y-6 animate-in fade-in slide-in-from-right-4">
-                     <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                        {detailAds.map(ad => (
-                          <div key={ad.id} className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm flex gap-6 group">
-                             <img src={ad.images[0]} className="w-24 h-24 rounded-2xl object-cover" />
-                             <div className="flex-1 flex flex-col justify-between py-1">
-                                <div>
-                                   <h5 className="font-black text-gray-900 uppercase text-xs line-clamp-1">{ad.title}</h5>
-                                   <p className="text-blue-600 font-black text-sm mt-1">₹{ad.price.toLocaleString()}</p>
-                                </div>
-                                <div className="flex gap-2">
-                                   <span className={`px-2 py-0.5 rounded-lg text-[8px] font-black uppercase ${ad.status === ListingStatus.APPROVED ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>{ad.status}</span>
-                                   <button onClick={() => { setSelectedListingId(ad.id); }} className="text-gray-400 hover:text-blue-600 ml-auto transition-colors"><i className="fas fa-cog"></i></button>
-                                </div>
-                             </div>
-                          </div>
-                        ))}
-                        {detailAds.length === 0 && (
-                          <div className="col-span-2 text-center py-20 bg-gray-50 rounded-[3rem] border border-dashed border-gray-200">
-                             <i className="fas fa-box-open text-gray-200 text-4xl mb-4"></i>
-                             <p className="text-[10px] font-black uppercase text-gray-400">Inventory Empty</p>
-                          </div>
-                        )}
-                     </div>
-                  </div>
-                )}
-
-                {activeUserDetailTab === 'GEO_ANCHOR' && (
-                  <div className="space-y-8 animate-in fade-in slide-in-from-right-4">
-                     <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                        <div className="space-y-1">
-                           <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Country Node</label>
-                           <select className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={countries.find(c => detailStates.some(s => s.countryId === c.id))?.id || ''} onChange={e => handleDetailGeoChange('COUNTRY', e.target.value)}>
-                              <option value="">Select Domain</option>
-                              {countries.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                           </select>
-                        </div>
-                        <div className="space-y-1">
-                           <label className="text-[10px] font-black uppercase text-gray-400 ml-1">State Logic</label>
-                           <select className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={detailUser.stateId} onChange={e => handleDetailGeoChange('STATE', e.target.value)}>
-                              <option value="">Select Module</option>
-                              {detailStates.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                           </select>
-                        </div>
-                        <div className="space-y-1">
-                           <label className="text-[10px] font-black uppercase text-gray-400 ml-1">City Anchor</label>
-                           <select className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={detailUser.cityId} onChange={e => setDetailUser({...detailUser, cityId: e.target.value})}>
-                              <option value="">Select Segment</option>
-                              {detailCities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                           </select>
-                        </div>
-                     </div>
-                     <div className="space-y-1">
-                        <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Manual Address String</label>
-                        <textarea rows={4} className="w-full bg-gray-50 border p-6 rounded-3xl font-bold" value={detailUser.address} onChange={e => setDetailUser({...detailUser, address: e.target.value})} />
-                     </div>
-                     <button onClick={saveDetailProfile} disabled={isProcessing} className="w-full bg-slate-900 text-white py-5 rounded-3xl font-black uppercase text-[10px] tracking-widest shadow-2xl">Commit Geo Logic</button>
-                  </div>
-                )}
-
-                {activeUserDetailTab === 'RATINGS' && (
-                  <div className="space-y-6 animate-in fade-in slide-in-from-right-4 pb-10">
-                    <div className="flex justify-between items-center px-2">
-                      <div>
-                        <h5 className="text-[10px] font-black uppercase tracking-widest text-blue-500">Feedback Record Management</h5>
-                        <p className="text-[9px] font-bold text-gray-400 mt-1 uppercase">Average: {detailUser.averageRating || 0} Stars ({detailUser.ratingCount || 0} reviews)</p>
-                      </div>
-                    </div>
-                    <div className="space-y-4">
-                      {detailRatings.map(rating => (
-                        <div key={rating.id} className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-4 group">
-                          <div className="flex justify-between items-start">
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 bg-gray-100 rounded-xl flex items-center justify-center text-gray-500 font-black text-xs">
-                                {rating.fromUserName.charAt(0)}
-                              </div>
-                              <div>
-                                <p className="text-xs font-black uppercase text-gray-900">{rating.fromUserName}</p>
-                                <div className="flex text-[8px] text-yellow-400 mt-0.5">
-                                  {[...Array(5)].map((_, i) => (
-                                    <i key={i} className={`fas fa-star ${i < rating.score ? 'text-yellow-400' : 'text-gray-200'}`}></i>
-                                  ))}
-                                  <span className="ml-2 text-gray-400 font-bold">{new Date(rating.timestamp).toLocaleDateString()}</span>
-                                </div>
-                              </div>
-                            </div>
-                            <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                              <button 
-                                onClick={() => handleRatingEdit(rating.id)}
-                                className="w-8 h-8 bg-blue-50 text-blue-600 rounded-lg flex items-center justify-center hover:bg-blue-600 hover:text-white transition-all shadow-sm"
-                                title="Edit Comment"
-                              >
-                                <i className="fas fa-pen text-[10px]"></i>
-                              </button>
-                              <button 
-                                onClick={() => handleRatingDelete(rating.id)}
-                                className="w-8 h-8 bg-rose-50 text-rose-600 rounded-lg flex items-center justify-center hover:bg-rose-600 hover:text-white transition-all shadow-sm"
-                                title="Delete Rating"
-                              >
-                                <i className="fas fa-trash-alt text-[10px]"></i>
-                              </button>
-                            </div>
-                          </div>
-                          <p className="text-sm text-gray-600 italic px-2">"{rating.comment}"</p>
-                        </div>
-                      ))}
-                      {detailRatings.length === 0 && (
-                        <div className="text-center py-20 bg-gray-50 rounded-[3rem] border border-dashed border-gray-200">
-                           <i className="fas fa-star-half-alt text-gray-200 text-4xl mb-4"></i>
-                           <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">No Feedback Records Found</p>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                )}
-             </div>
-          </div>
-       </div>
-    );
-  };
-
-  const renderUsersModule = () => {
-    if (selectedUserId && detailUser) {
-        return renderUserDetailInline();
-    }
-
-    const filtered = users.filter(u => {
-      const matchesSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.email.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesRole = userFilterRole === 'ALL' || u.role === userFilterRole;
-      return matchesSearch && matchesRole;
-    });
-
-    if (activeTab === 'all-users') {
-      return (
-        <div className="space-y-6 animate-in fade-in duration-500 pb-20">
-          <div className="flex flex-col md:flex-row gap-4 bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm">
-             <div className="flex-1 flex items-center gap-4 px-4 bg-gray-50 rounded-2xl">
-                <i className="fas fa-search text-gray-300"></i>
-                <input type="text" placeholder="Lookup entities by identity or electronic mail..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-transparent border-none py-4 outline-none text-xs font-bold" />
-             </div>
-             <select value={userFilterRole} onChange={e => setUserFilterRole(e.target.value)} className="bg-white border border-gray-100 px-6 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest outline-none">
-                <option value="ALL">All Protocols</option>
-                <option value={UserRole.ADMIN}>Administrators</option>
-                <option value={UserRole.MODERATOR}>Moderators</option>
-                <option value={UserRole.USER}>Standard Entities</option>
-             </select>
-          </div>
-
-          <div className="bg-white rounded-[3rem] border border-gray-100 overflow-hidden shadow-sm">
-             <div className="overflow-x-auto custom-scrollbar">
-                <table className="w-full text-left min-w-[800px]">
-                    <thead>
-                    <tr className="text-[10px] font-black uppercase text-gray-400 border-b border-gray-50">
-                        <th className="px-10 py-6">Entity Architecture</th>
-                        <th className="px-10 py-6">Operational Role</th>
-                        <th className="px-10 py-6">Capital Balance</th>
-                        <th className="px-10 py-6 text-right">Data Command</th>
-                    </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                    {filtered.map(u => (
-                        <tr key={u.id} className="hover:bg-gray-50/50 transition-colors">
-                            <td className="px-10 py-6">
-                                <div className="flex items-center gap-4">
-                                <img src={u.photo} className="w-12 h-12 rounded-2xl object-cover shadow-sm" />
-                                <div>
-                                    <p className="text-sm font-black text-gray-900">{u.name}</p>
-                                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{u.email}</p>
-                                </div>
-                                {u.isVerified && <span className="bg-blue-50 text-blue-600 w-5 h-5 rounded-full flex items-center justify-center text-[8px]"><i className="fas fa-check"></i></span>}
-                                </div>
-                            </td>
-                            <td className="px-10 py-6"><span className={`px-3 py-1 rounded-xl text-[8px] font-black uppercase border ${u.role === UserRole.ADMIN ? 'bg-slate-900 text-white border-black' : u.role === UserRole.MODERATOR ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-blue-50 text-blue-600 border-blue-100'}`}>{u.role}</span></td>
-                            <td className="px-10 py-6"><span className="text-sm font-black text-gray-900">₹{u.walletBalance.toLocaleString()}</span></td>
-                            <td className="px-10 py-6 text-right">
-                                <button onClick={() => setSelectedUserId(u.id)} className="bg-gray-50 text-gray-900 px-6 py-3 rounded-xl text-[9px] font-black uppercase tracking-widest hover:bg-blue-600 hover:text-white transition-all shadow-sm active:scale-95 border border-gray-100">Configure Node</button>
-                            </td>
-                        </tr>
-                    ))}
-                    </tbody>
-                </table>
-             </div>
-          </div>
-        </div>
-      );
-    }
-    return null;
-  };
-
-  const renderListings = () => {
-    const filtered = listings.filter(l => {
-      const matchesSearch = l.title.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesStatus = listingFilterStatus === 'ALL' || l.status === listingFilterStatus;
-      const matchesCategory = listingFilterCategory === 'ALL' || l.category === listingFilterCategory;
-      return matchesSearch && matchesStatus && matchesCategory;
-    });
-
-    if (activeTab === 'master') {
-      return (
-        <div className="space-y-8 animate-in fade-in duration-500 pb-20">
-          <div className="flex flex-col lg:flex-row gap-4 bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm items-center">
-             <div className="flex-1 flex items-center gap-4 px-6 bg-gray-50 rounded-2xl w-full">
-                <i className="fas fa-search text-gray-300"></i>
-                <input type="text" placeholder="Scan global inventory by product label..." value={searchQuery} onChange={e => setSearchQuery(e.target.value)} className="w-full bg-transparent border-none py-4 outline-none text-xs font-bold" />
-             </div>
-             <div className="flex gap-4 w-full lg:w-auto">
-               <select value={listingFilterStatus} onChange={e => setListingFilterStatus(e.target.value)} className="flex-1 bg-white border border-gray-100 px-6 py-4 rounded-2xl text-[10px] font-black uppercase outline-none">
-                  <option value="ALL">All States</option>
-                  <option value={ListingStatus.PENDING}>Pending</option>
-                  <option value={ListingStatus.APPROVED}>Authorized</option>
-                  <option value={ListingStatus.REJECTED}>Violations</option>
-               </select>
-               <select value={listingFilterCategory} onChange={e => setListingFilterCategory(e.target.value)} className="flex-1 bg-white border border-gray-100 px-6 py-4 rounded-2xl text-[10px] font-black uppercase outline-none">
-                  <option value="ALL">All Segments</option>
-                  {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-               </select>
-             </div>
-          </div>
-
-          <div className="bg-white rounded-[3rem] border border-gray-100 overflow-hidden shadow-sm">
-             <div className="overflow-x-auto custom-scrollbar">
-                <table className="w-full text-left min-w-[1000px]">
-                    <thead>
-                    <tr className="text-[10px] font-black uppercase text-gray-400 border-b border-gray-50">
-                        <th className="px-10 py-6">Listing Identity</th>
-                        <th className="px-10 py-6">Commercial Value</th>
-                        <th className="px-10 py-6">Geo Origin</th>
-                        <th className="px-10 py-6 text-right">Inventory Logic</th>
-                    </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                    {filtered.map(l => (
-                        <tr key={l.id} className="hover:bg-gray-50/50 transition-colors">
-                            <td className="px-10 py-6">
-                                <div className="flex items-center gap-4">
-                                <img src={l.images[0]} className="w-14 h-14 rounded-2xl object-cover shadow-sm" />
-                                <div>
-                                    <p className="text-sm font-black text-gray-900 truncate max-w-[200px] uppercase">{l.title}</p>
-                                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-widest">{l.category}</p>
-                                </div>
-                                {l.isPremium && <span className="bg-amber-400 text-amber-900 w-5 h-5 rounded-lg flex items-center justify-center text-[8px] shadow-sm"><i className="fas fa-crown"></i></span>}
-                                </div>
-                            </td>
-                            <td className="px-10 py-6"><span className="text-sm font-black text-gray-900">₹{l.price.toLocaleString()}</span></td>
-                            <td className="px-10 py-6">
-                            <p className="text-[10px] font-black text-gray-900 uppercase">{CITIES.find(c => c.id === l.cityId)?.name || 'ROOT'}</p>
-                            <p className="text-[8px] text-gray-400 font-bold uppercase tracking-tighter">UID: {l.sellerId}</p>
-                            </td>
-                            <td className="px-10 py-6 text-right">
-                            <div className="flex justify-end gap-2">
-                                <button onClick={() => setSelectedListingId(l.id)} className="w-10 h-10 bg-gray-50 text-gray-900 hover:bg-blue-600 hover:text-white rounded-xl flex items-center justify-center transition-all shadow-sm border border-gray-100"><i className="fas fa-cog text-xs"></i></button>
-                                <button onClick={() => { if(onViewAd) onViewAd(l); }} className="w-10 h-10 bg-gray-50 text-gray-900 hover:bg-emerald-600 hover:text-white rounded-xl flex items-center justify-center transition-all shadow-sm border border-gray-100"><i className="fas fa-eye text-xs"></i></button>
-                            </div>
-                            </td>
-                        </tr>
-                    ))}
-                    </tbody>
-                </table>
-             </div>
-          </div>
-        </div>
-      );
-    }
-    return null;
-  };
-
-  const renderListingDetailModal = () => {
-    if (!detailListing) return null;
-    return (
-      <div className="fixed inset-0 z-[200] flex items-center justify-center p-6 bg-slate-900/40 backdrop-blur-md animate-in fade-in">
-         <div className="bg-white w-full max-w-4xl rounded-[3rem] shadow-2xl overflow-hidden flex flex-col h-[75vh]">
-            <div className="p-8 border-b border-gray-100 bg-gray-50/50 flex justify-between items-center">
-               <h3 className="text-xl font-black uppercase text-gray-900">Listing Asset Management</h3>
-               <button onClick={() => setSelectedListingId(null)} className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-gray-400 hover:text-rose-500 transition-all shadow-sm border border-gray-100"><i className="fas fa-times"></i></button>
-            </div>
-            <div className="flex-1 p-10 overflow-y-auto custom-scrollbar">
-               <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
-                  <div className="lg:col-span-4 space-y-6">
-                     <div className="aspect-square rounded-[2rem] overflow-hidden border-4 border-gray-50 shadow-xl">
-                        <img src={detailListing.images[0]} className="w-full h-full object-cover" />
-                     </div>
-                     <div className="bg-blue-50 p-6 rounded-[2rem] border border-blue-100">
-                        <p className="text-[10px] font-black uppercase tracking-widest text-blue-900 mb-2">Metadata Node</p>
-                        <div className="space-y-2">
-                           <div className="flex justify-between text-[9px] font-bold"><span>Asset ID</span><span className="font-black text-blue-600">{detailListing.id}</span></div>
-                           <div className="flex justify-between text-[9px] font-bold"><span>Traffic Volume</span><span className="font-black text-blue-600">{detailListing.views} Hits</span></div>
-                           <div className="flex justify-between text-[9px] font-bold"><span>Creation Delta</span><span className="font-black text-blue-600">{new Date(detailListing.createdAt).toLocaleDateString()}</span></div>
-                        </div>
-                     </div>
-                  </div>
-                  <div className="lg:col-span-8 space-y-6">
-                     <div className="space-y-4">
-                        <div className="space-y-1">
-                           <label className="text-[9px] font-black uppercase text-gray-400">Inventory Label</label>
-                           <input type="text" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={detailListing.title} onChange={e => setDetailListing({...detailListing, title: e.target.value})} />
-                        </div>
-                        <div className="grid grid-cols-2 gap-4">
-                           <div className="space-y-1">
-                              <label className="text-[9px] font-black uppercase text-gray-400">Market Value (₹)</label>
-                              <input type="number" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={detailListing.price} onChange={e => setDetailListing({...detailListing, price: Number(e.target.value)})} />
-                           </div>
-                           <div className="space-y-1">
-                              <label className="text-[9px] font-black uppercase text-gray-400">Segment</label>
-                              <select className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={detailListing.category} onChange={e => setDetailListing({...detailListing, category: e.target.value})}>
-                                 {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
-                              </select>
-                           </div>
-                        </div>
-                        <div className="space-y-1">
-                           <label className="text-[9px] font-black uppercase text-gray-400">Logic State</label>
-                           <div className="flex gap-2">
-                              {[ListingStatus.APPROVED, ListingStatus.PENDING, ListingStatus.REJECTED].map(s => (
-                                 <button key={s} onClick={() => setDetailListing({...detailListing, status: s})} className={`flex-1 py-3 rounded-xl text-[9px] font-black uppercase border transition-all ${detailListing.status === s ? 'bg-blue-600 text-white border-blue-600 shadow-lg' : 'bg-gray-50 text-gray-400 border-gray-100 hover:bg-gray-100'}`}>{s}</button>
-                              ))}
-                           </div>
-                        </div>
-                        <div className="space-y-1">
-                           <label className="text-[9px] font-black uppercase text-gray-400">Asset Description</label>
-                           <textarea rows={5} className="w-full bg-gray-50 border p-6 rounded-3xl font-bold text-sm" value={detailListing.description} onChange={e => setDetailListing({...detailListing, description: e.target.value})} />
-                        </div>
-                     </div>
-                     <div className="flex gap-4 pt-4">
-                        <button onClick={handleListingSave} className="flex-1 bg-slate-900 text-white py-5 rounded-3xl font-black uppercase text-[10px] tracking-widest shadow-2xl">Save Asset Protocol</button>
-                        <button onClick={() => handleListingDelete(detailListing.id)} className="w-20 bg-rose-50 text-rose-500 rounded-3xl border border-rose-100 flex items-center justify-center hover:bg-rose-600 hover:text-white transition-all shadow-xl shadow-rose-100"><i className="fas fa-trash-alt"></i></button>
-                     </div>
-                  </div>
-               </div>
-            </div>
-         </div>
-      </div>
-    );
   };
 
   const renderRevenue = () => {
     if (activeTab === 'pricing') {
       return (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
-          <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-8">
-            <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-500">Global Pricing Strategy</h4>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-               <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Premium Ad Price (₹)</label><input type="number" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={config.premiumPrice} onChange={e => setConfig({...config, premiumPrice: Number(e.target.value)})} /></div>
-               <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Standard Ad Price (₹)</label><input type="number" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={config.standardAdPrice} onChange={e => setConfig({...config, standardAdPrice: Number(e.target.value)})} /></div>
-               <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Blue Tick Price (₹)</label><input type="number" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={config.blueTickPrice} onChange={e => setConfig({...config, blueTickPrice: Number(e.target.value)})} /></div>
-               <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Free Ad Limit</label><input type="number" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={config.freeAdLimit} onChange={e => setConfig({...config, freeAdLimit: Number(e.target.value)})} /></div>
-            </div>
-            <button onClick={handleConfigCommit} className="w-full bg-blue-600 text-white py-4 rounded-3xl font-black uppercase text-[10px] tracking-widest shadow-xl">Commit Pricing Logic</button>
-          </div>
-        </div>
-      );
-    }
-    if (activeTab === 'banner_ads') {
-        return (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
-              <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-8">
-                <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-500">Banner Ad Configuration</h4>
-                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                   <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Tier 1 Price (₹)</label><input type="number" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={config.bannerAdTierPrices.T1} onChange={e => setConfig({...config, bannerAdTierPrices: {...config.bannerAdTierPrices, T1: Number(e.target.value)}})} /></div>
-                   <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Tier 2 Price (₹)</label><input type="number" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={config.bannerAdTierPrices.T2} onChange={e => setConfig({...config, bannerAdTierPrices: {...config.bannerAdTierPrices, T2: Number(e.target.value)}})} /></div>
-                   <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Tier 3 Price (₹)</label><input type="number" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={config.bannerAdTierPrices.T3} onChange={e => setConfig({...config, bannerAdTierPrices: {...config.bannerAdTierPrices, T3: Number(e.target.value)}})} /></div>
-                </div>
-                <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Default Duration (Days)</label><input type="number" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={config.bannerAdDurationDays} onChange={e => setConfig({...config, bannerAdDurationDays: Number(e.target.value)})} /></div>
-                <button onClick={handleConfigCommit} className="w-full bg-blue-600 text-white py-4 rounded-3xl font-black uppercase text-[10px] tracking-widest shadow-xl">Commit Banner Protocols</button>
+        <div className="space-y-6 max-w-4xl">
+           <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-6">
+              <h3 className="text-xl font-black uppercase text-gray-900">Base Pricing Configuration</h3>
+              <div className="grid grid-cols-2 gap-6">
+                 <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Premium Ad Cost</label><input type="number" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold text-sm" value={config.premiumPrice} onChange={e => setConfig({...config, premiumPrice: Number(e.target.value)})} /></div>
+                 <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Premium Duration (Days)</label><input type="number" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold text-sm" value={config.premiumDurationDays} onChange={e => setConfig({...config, premiumDurationDays: Number(e.target.value)})} /></div>
+                 <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Blue Tick Cost</label><input type="number" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold text-sm" value={config.blueTickPrice} onChange={e => setConfig({...config, blueTickPrice: Number(e.target.value)})} /></div>
+                 <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Blue Tick Duration (Days)</label><input type="number" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold text-sm" value={config.blueTickDurationDays} onChange={e => setConfig({...config, blueTickDurationDays: Number(e.target.value)})} /></div>
+                 <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Standard Ad Cost (Post-Limit)</label><input type="number" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold text-sm" value={config.standardAdPrice} onChange={e => setConfig({...config, standardAdPrice: Number(e.target.value)})} /></div>
+                 <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Free Ad Limit</label><input type="number" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold text-sm" value={config.freeAdLimit} onChange={e => setConfig({...config, freeAdLimit: Number(e.target.value)})} /></div>
               </div>
-            </div>
-        )
-    }
-    if (activeTab === 'adsense') {
-      return (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
-          <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-8">
-            <div className="flex justify-between items-center border-b border-gray-50 pb-6">
-              <div>
-                <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-500">Google AdSense Module</h4>
-                <p className="text-[9px] font-bold text-gray-400 mt-1 uppercase">Inject third-party programmatic revenue streams</p>
-              </div>
-              <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-300">
-                <i className="fab fa-google text-xl"></i>
-              </div>
-            </div>
-            
-            <div className="space-y-6">
-               <div className="space-y-2">
-                  <div className="flex justify-between items-center px-1">
-                    <label className="text-[10px] font-black uppercase text-gray-400">Master Script Integration</label>
-                    <span className="text-[8px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded">Auto-Injection Enabled</span>
-                  </div>
-                  <textarea 
-                    rows={12} 
-                    className="w-full bg-gray-50 border border-gray-200 p-6 rounded-[2rem] font-mono text-xs focus:bg-white focus:border-blue-200 transition-all outline-none shadow-inner" 
-                    value={config.googleAdsenseCode} 
-                    onChange={e => setConfig({...config, googleAdsenseCode: e.target.value})}
-                    placeholder="Paste your Google AdSense <script> or Auto-ads code here..."
-                  />
-               </div>
-
-               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                  <div className="bg-blue-50/50 p-6 rounded-3xl border border-blue-100/50 flex gap-4">
-                     <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-500 shadow-sm flex-shrink-0">
-                        <i className="fas fa-shield-check"></i>
-                     </div>
-                     <div>
-                        <p className="text-[10px] font-black text-blue-900 uppercase">Security Check</p>
-                        <p className="text-[9px] text-blue-700/70 mt-1 leading-relaxed">The platform sanitizes the input for high-level XSS protection while maintaining script integrity.</p>
-                     </div>
-                  </div>
-                  <div className="bg-emerald-50/50 p-6 rounded-3xl border border-emerald-100/50 flex gap-4">
-                     <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-emerald-500 shadow-sm flex-shrink-0">
-                        <i className="fas fa-bolt"></i>
-                     </div>
-                     <div>
-                        <p className="text-[10px] font-black text-emerald-900 uppercase">Performance Node</p>
-                        <p className="text-[9px] text-emerald-700/70 mt-1 leading-relaxed">Ads are loaded asynchronously to prevent impact on marketplace Core Web Vitals.</p>
-                     </div>
-                  </div>
-               </div>
-            </div>
-            
-            <button 
-              onClick={handleConfigCommit} 
-              disabled={isProcessing}
-              className="w-full bg-slate-900 text-white py-5 rounded-[2rem] font-black uppercase text-[10px] tracking-[0.2em] shadow-2xl shadow-slate-200 hover:bg-black transition-all flex items-center justify-center gap-3 active:scale-[0.98]"
-            >
-              {isProcessing ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-save"></i>} Commit AdSense Protocols
-            </button>
-          </div>
-        </div>
-      );
-    }
-    if (activeTab === 'gateways') {
-      const gateways = [
-        { id: 'razorpay', label: 'Razorpay', icon: 'fa-indian-rupee-sign', region: 'India', fields: [
-          { key: 'keyId', label: 'Key ID' },
-          { key: 'keySecret', label: 'Key Secret' }
-        ]},
-        { id: 'paytm', label: 'Paytm', icon: 'fa-wallet', region: 'India', fields: [
-          { key: 'merchantId', label: 'Merchant ID' },
-          { key: 'merchantKey', label: 'Merchant Key' },
-          { key: 'website', label: 'Website URL' }
-        ]},
-        { id: 'phonepe', label: 'PhonePe', icon: 'fa-mobile-screen', region: 'India', fields: [
-          { key: 'merchantId', label: 'Merchant ID' },
-          { key: 'saltKey', label: 'Salt Key' },
-          { key: 'saltIndex', label: 'Salt Index' }
-        ]},
-        { id: 'stripe', label: 'Stripe', icon: 'fa-brands fa-stripe', region: 'International', fields: [
-          { key: 'publishableKey', label: 'Publishable Key' },
-          { key: 'secretKey', label: 'Secret Key' }
-        ]},
-        { id: 'paypal', label: 'PayPal', icon: 'fa-brands fa-paypal', region: 'International', fields: [
-          { key: 'clientId', label: 'Client ID' },
-          { key: 'secret', label: 'Secret Key' }
-        ]}
-      ];
-
-      return (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 pb-20">
-          <div className="grid grid-cols-1 gap-8">
-            {gateways.map(gw => (
-              <div key={gw.id} className="bg-white p-8 md:p-10 rounded-[3rem] border border-gray-100 shadow-sm transition-all hover:shadow-md">
-                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 border-b border-gray-50 pb-8">
-                   <div className="flex items-center gap-6">
-                      <div className={`w-16 h-16 rounded-[2rem] flex items-center justify-center text-2xl shadow-xl shadow-blue-50 ${config.paymentGateway[gw.id as keyof SystemConfig['paymentGateway']]?.active ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
-                         <i className={`fas ${gw.icon}`}></i>
-                      </div>
-                      <div>
-                         <h4 className="text-xl font-black uppercase tracking-tight text-gray-900">{gw.label}</h4>
-                         <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${gw.region === 'India' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
-                            {gw.region} Node
-                         </span>
-                      </div>
-                   </div>
-                   <div className="flex items-center gap-4 bg-gray-50 p-2 rounded-2xl border border-gray-100">
-                      <span className={`text-[10px] font-black uppercase tracking-widest mr-2 ${config.paymentGateway[gw.id as keyof SystemConfig['paymentGateway']]?.active ? 'text-blue-600' : 'text-gray-400'}`}>
-                         {config.paymentGateway[gw.id as keyof SystemConfig['paymentGateway']]?.active ? 'Operational' : 'Offline'}
-                      </span>
-                      <button 
-                        onClick={() => setConfig({
-                          ...config, 
-                          paymentGateway: {
-                            ...config.paymentGateway, 
-                            [gw.id]: { ...config.paymentGateway[gw.id as keyof SystemConfig['paymentGateway']], active: !config.paymentGateway[gw.id as keyof SystemConfig['paymentGateway']]?.active }
-                          }
-                        })}
-                        className={`w-16 h-8 rounded-full relative transition-all duration-300 ${config.paymentGateway[gw.id as keyof SystemConfig['paymentGateway']]?.active ? 'bg-blue-600' : 'bg-gray-300'}`}
-                      >
-                         <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all duration-300 shadow-sm ${config.paymentGateway[gw.id as keyof SystemConfig['paymentGateway']]?.active ? 'left-9' : 'left-1'}`}></div>
-                      </button>
-                   </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-                   {gw.fields.map(f => (
-                     <div key={f.key} className="space-y-1">
-                        <label className="text-[10px] font-black uppercase text-gray-400 ml-1">{f.label}</label>
-                        <input 
-                          type="password"
-                          className="w-full bg-gray-50 border border-gray-200 p-4 rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-blue-200 transition-all"
-                          value={(config.paymentGateway[gw.id as keyof SystemConfig['paymentGateway']] as any)?.[f.key] || ''}
-                          onChange={e => {
-                            const updatedGateway = { ...(config.paymentGateway[gw.id as keyof SystemConfig['paymentGateway']] as any), [f.key]: e.target.value };
-                            setConfig({
-                              ...config,
-                              paymentGateway: { ...config.paymentGateway, [gw.id]: updatedGateway }
-                            });
-                          }}
-                          placeholder={`Enter encrypted ${f.label.toLowerCase()}`}
-                        />
-                     </div>
-                   ))}
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="bg-slate-900 p-10 rounded-[3rem] shadow-2xl flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden">
-             <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500 rounded-full blur-[120px] opacity-10"></div>
-             <div>
-                <h4 className="text-xl font-black text-white uppercase tracking-tight">Deploy Gateway Logic</h4>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-2">Updating protocols will immediately affect all city-locked settlement nodes</p>
-             </div>
-             <button 
-                onClick={handleConfigCommit}
-                disabled={isProcessing}
-                className="w-full md:w-auto bg-blue-600 text-white px-12 py-5 rounded-[2rem] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-blue-500/20 hover:bg-blue-500 transition-all active:scale-[0.98]"
-             >
-                {isProcessing ? <i className="fas fa-circle-notch fa-spin mr-2"></i> : <i className="fas fa-rocket mr-2"></i>}
-                Push Protocol Updates
-             </button>
-          </div>
-        </div>
-      );
-    }
-    return null;
-  };
-
-  const renderGeoCats = () => {
-    if (activeTab === 'location_mgmt') {
-      const filteredCities = cities.filter(c => {
-        const matchesSearch = c.name.toLowerCase().includes(citySearchQuery.toLowerCase());
-        const matchesState = !cityFilterStateId || c.stateId === cityFilterStateId;
-        const state = states.find(s => s.id === c.stateId);
-        const matchesCountry = !cityFilterCountryId || (state && state.countryId === cityFilterCountryId);
-        return matchesSearch && matchesState && matchesCountry;
-      });
-
-      const filteredStatesForFilter = cityFilterCountryId 
-        ? states.filter(s => s.countryId === cityFilterCountryId)
-        : states;
-
-      return (
-        <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 pb-20">
-          {/* 1. City Filter & Search Row */}
-          <div className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col md:flex-row gap-4 items-center">
-             <div className="flex-1 flex items-center gap-4 px-6 bg-gray-50 rounded-2xl w-full">
-                <i className="fas fa-search text-gray-300"></i>
-                <input 
-                  type="text" 
-                  placeholder="Lookup cities within system inventory..." 
-                  value={citySearchQuery} 
-                  onChange={e => setCitySearchQuery(e.target.value)} 
-                  className="w-full bg-transparent border-none py-4 outline-none text-xs font-bold" 
-                />
-             </div>
-             <div className="flex gap-4 w-full md:w-auto">
-               <select 
-                value={cityFilterCountryId} 
-                onChange={e => {
-                  setCityFilterCountryId(e.target.value);
-                  setCityFilterStateId('');
-                }} 
-                className="flex-1 bg-white border border-gray-100 px-6 py-4 rounded-2xl text-[10px] font-black uppercase outline-none min-w-[150px]"
-               >
-                  <option value="">All Countries</option>
-                  {countries.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-               </select>
-               <select 
-                value={cityFilterStateId} 
-                onChange={e => setCityFilterStateId(e.target.value)} 
-                className="flex-1 bg-white border border-gray-100 px-6 py-4 rounded-2xl text-[10px] font-black uppercase outline-none min-w-[150px]"
-               >
-                  <option value="">All States</option>
-                  {filteredStatesForFilter.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-               </select>
-             </div>
-          </div>
-
-          {/* 2. City List Table */}
-          <div className="bg-white rounded-[3rem] border border-gray-100 overflow-hidden shadow-sm">
-             <div className="overflow-x-auto custom-scrollbar">
-                <table className="w-full text-left min-w-[800px]">
-                    <thead className="bg-gray-50/50">
-                    <tr className="text-[10px] font-black uppercase text-gray-400">
-                        <th className="px-10 py-6">City Name</th>
-                        <th className="px-10 py-6">Operational Tier</th>
-                        <th className="px-10 py-6 text-right">Status Control</th>
-                    </tr>
-                    </thead>
-                    <tbody className="divide-y divide-gray-50">
-                    {filteredCities.map(c => (
-                        <tr key={c.id} className="text-sm font-bold">
-                            <td className="px-10 py-6">{c.name}</td>
-                            <td className="px-10 py-6">
-                                <select className="bg-gray-50 border px-3 py-1 rounded-lg text-[10px] font-black" value={cityTiers[c.id] || 'T2'} onChange={e => handleCityTierChange(c.id, e.target.value as any)}>
-                                <option value="T1">Tier 1</option>
-                                <option value="T2">Tier 2</option>
-                                <option value="T3">Tier 3</option>
-                                </select>
-                            </td>
-                            <td className="px-10 py-6 text-right">
-                                <button onClick={() => handleCityToggle(c.id, !!c.isActive)} className={`px-4 py-2 rounded-xl text-[9px] font-black uppercase border transition-all ${c.isActive ? 'bg-emerald-50 text-emerald-600 border-emerald-100' : 'bg-rose-50 text-rose-600 border-rose-100'}`}>{c.isActive ? 'Active' : 'Disabled'}</button>
-                            </td>
-                        </tr>
-                    ))}
-                    {filteredCities.length === 0 && (
-                      <tr>
-                        <td colSpan={3} className="px-10 py-20 text-center text-gray-400 text-xs italic uppercase">No matching city nodes found.</td>
-                      </tr>
-                    )}
-                    </tbody>
-                </table>
-             </div>
-          </div>
-
-          {/* 3. Forms Grid */}
-          <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
-             <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-6">
-                <h5 className="text-[10px] font-black uppercase tracking-widest text-blue-500">Register City</h5>
-                <form onSubmit={handleCityAdd} className="space-y-4">
-                   <select className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={cityAddForm.countryId} onChange={e => {
-                      setCityAddForm({...cityAddForm, countryId: e.target.value, stateId: ''});
-                      setFormStates(dbService.getStates(e.target.value));
-                   }}>
-                      <option value="">Select Country</option>
-                      {countries.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                   </select>
-                   <select className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={cityAddForm.stateId} onChange={e => setCityAddForm({...cityAddForm, stateId: e.target.value})}>
-                      <option value="">Select State</option>
-                      {formStates.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
-                   </select>
-                   <input type="text" placeholder="City Name" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={cityAddForm.name} onChange={e => setCityAddForm({...cityAddForm, name: e.target.value})} />
-                   <button type="submit" className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase text-[10px]">Add City</button>
-                </form>
-             </div>
-             
-             <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-6">
-                <h5 className="text-[10px] font-black uppercase tracking-widest text-blue-500">Register Country</h5>
-                <form onSubmit={handleCountryAdd} className="space-y-4">
-                   <input type="text" placeholder="Country Name" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={countryAddForm.name} onChange={e => setCountryAddForm({...countryAddForm, name: e.target.value})} />
-                   <input type="text" placeholder="ISO Code (e.g. IN)" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={countryAddForm.code} onChange={e => setCountryAddForm({...countryAddForm, code: e.target.value})} />
-                   <button type="submit" className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase text-[10px]">Add Country</button>
-                </form>
-             </div>
-             
-             <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-6">
-                <h5 className="text-[10px] font-black uppercase tracking-widest text-blue-500">Register State</h5>
-                <form onSubmit={handleStateAdd} className="space-y-4">
-                   <select className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={stateAddForm.countryId} onChange={e => setStateAddForm({...stateAddForm, countryId: e.target.value})}>
-                      <option value="">Select Country</option>
-                      {countries.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                   </select>
-                   <input type="text" placeholder="State Name" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={stateAddForm.name} onChange={e => setStateAddForm({...stateAddForm, name: e.target.value})} />
-                   <button type="submit" className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase text-[10px]">Add State</button>
-                </form>
-             </div>
-          </div>
-        </div>
-      );
-    }
-    if (activeTab === 'category_mgmt') {
-      return (
-        <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4">
-          <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-8">
-             <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-500">{isEditingCat ? 'Modify Segment' : 'Register New Segment'}</h4>
-             <form onSubmit={handleCategoryAction} className="grid grid-cols-1 md:grid-cols-3 gap-6">
-                <input required type="text" placeholder="Category Name" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={catForm.name} onChange={e => setCatForm({...catForm, name: e.target.value})} />
-                <input type="text" placeholder="Icon Class (FontAwesome)" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={catForm.icon} onChange={e => setCatForm({...catForm, icon: e.target.value})} />
-                <button type="submit" className="bg-blue-600 text-white rounded-2xl font-black uppercase text-[10px]">{isEditingCat ? 'Update Segment' : 'Register Segment'}</button>
-             </form>
-          </div>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6">
-             {categories.map(cat => (
-                <div key={cat.id} className="bg-white p-6 rounded-[2.5rem] border border-gray-100 shadow-sm flex flex-col items-center text-center space-y-4 group">
-                   <div className="w-16 h-16 bg-blue-50 rounded-2xl flex items-center justify-center text-blue-600 text-2xl group-hover:bg-blue-600 group-hover:text-white transition-all shadow-lg shadow-blue-50">
-                      <i className={`fas ${cat.icon}`}></i>
-                   </div>
-                   <h5 className="font-black text-gray-900 uppercase text-xs">{cat.name}</h5>
-                   <div className="flex gap-2 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => { setIsEditingCat(true); setCatForm(cat); }} className="w-8 h-8 bg-gray-50 text-gray-400 hover:text-blue-600 rounded-lg flex items-center justify-center"><i className="fas fa-pen text-[10px]"></i></button>
-                      <button onClick={async () => { if(window.confirm("Delete category?")) { await dbService.deleteCategory(cat.id); loadData(); } }} className="w-8 h-8 bg-gray-50 text-gray-400 hover:text-rose-500 rounded-lg flex items-center justify-center"><i className="fas fa-trash-alt text-[10px]"></i></button>
-                   </div>
-                </div>
-             ))}
-          </div>
-        </div>
-      );
-    }
-    return null;
-  };
-
-  const renderSystem = () => {
-    if (activeTab === 'site') {
-      return (
-        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-             <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-8">
-                <div className="flex items-center justify-between border-b border-gray-50 pb-6">
-                  <div>
-                    <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-500">Platform Availability</h4>
-                    <p className="text-[9px] font-bold text-gray-400 mt-1 uppercase">Control global access to marketplace nodes</p>
-                  </div>
-                  <button 
-                    onClick={() => setConfig({ ...config, maintenanceMode: !config.maintenanceMode })}
-                    className={`w-14 h-7 rounded-full relative transition-all duration-300 ${config.maintenanceMode ? 'bg-rose-600' : 'bg-emerald-500'}`}
-                  >
-                    <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all duration-300 shadow-sm ${config.maintenanceMode ? 'left-8' : 'left-1'}`}></div>
-                  </button>
-                </div>
-                <div className="flex items-center gap-4 bg-gray-50 p-6 rounded-[2rem] border border-gray-100">
-                  <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-lg ${config.maintenanceMode ? 'bg-rose-50 text-rose-600' : 'bg-emerald-50 text-emerald-600'}`}>
-                    <i className={`fas ${config.maintenanceMode ? 'fa-lock' : 'fa-globe'}`}></i>
-                  </div>
-                  <div>
-                    <p className="text-[10px] font-black text-gray-900 uppercase">System State: {config.maintenanceMode ? 'Locked' : 'Operational'}</p>
-                    <p className="text-[9px] text-gray-400 font-bold uppercase tracking-tight leading-relaxed">
-                        {config.maintenanceMode 
-                          ? 'Platform is currently restricted to Admin users only. Standard entities see a maintenance notice.' 
-                          : 'Marketplace is live and accessible to all global traffic segments.'}
-                    </p>
-                  </div>
-                </div>
-
-                <div className="h-px bg-gray-50 my-2"></div>
-
-                <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-500">Master Brand Identity</h4>
-                <div className="space-y-4">
-                   <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400 ml-1">Platform ID</label><input type="text" className="w-full bg-gray-50 border border-gray-200 p-4 rounded-2xl font-bold" value={config.siteName} onChange={e => setConfig({...config, siteName: e.target.value})} /></div>
-                   <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400 ml-1">Platform Tagline</label><input type="text" className="w-full bg-gray-50 border border-gray-200 p-4 rounded-2xl font-bold" value={config.branding.siteTagline} onChange={e => setConfig({...config, branding: {...config.branding, siteTagline: e.target.value}})} /></div>
-                   <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-4">
-                         <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Brand Logo Asset</label>
-                         <div className="w-full aspect-video bg-gray-50 border-2 border-dashed border-gray-200 rounded-3xl flex items-center justify-center relative overflow-hidden group">
-                            {config.logoUrl ? <img src={config.logoUrl} className="w-full h-full object-contain p-4" /> : <i className="fas fa-cloud-upload-alt text-2xl text-gray-300"></i>}
-                            <input type="file" onChange={e => handleConfigLogoUpload(e, 'logoUrl')} className="absolute inset-0 opacity-0 cursor-pointer" />
-                         </div>
-                      </div>
-                      <div className="space-y-4">
-                         <label className="text-[10px] font-black uppercase text-gray-400 ml-1">PWA Favicon Asset</label>
-                         <div className="w-full aspect-video bg-gray-50 border-2 border-dashed border-gray-200 rounded-3xl flex items-center justify-center relative overflow-hidden group">
-                            {config.branding.pwaIcon ? <img src={config.branding.pwaIcon} className="w-full h-full object-contain p-4" /> : <i className="fas fa-cloud-upload-alt text-2xl text-gray-300"></i>}
-                            <input type="file" onChange={e => handleConfigLogoUpload(e, 'branding.pwaIcon')} className="absolute inset-0 opacity-0 cursor-pointer" />
-                         </div>
-                      </div>
-                   </div>
-                </div>
-                <button onClick={handleConfigCommit} className="w-full bg-blue-600 text-white py-4 rounded-3xl font-black uppercase text-[10px] tracking-widest shadow-xl">Commit Visual Protocols</button>
-             </div>
-
-             <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-8">
-                <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-500">Electronic Communication Module</h4>
-                <div className="space-y-4">
-                   <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400 ml-1">System Support Mail</label><input type="email" className="w-full bg-gray-50 border border-gray-200 p-4 rounded-2xl font-bold" value={config.branding.supportEmail} onChange={e => setConfig({...config, branding: {...config.branding, supportEmail: e.target.value}})} /></div>
-                   <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400 ml-1">System Support Phone</label><input type="text" className="w-full bg-gray-50 border border-gray-200 p-4 rounded-2xl font-bold" value={config.branding.supportPhone} onChange={e => setConfig({...config, branding: {...config.branding, supportPhone: e.target.value}})} /></div>
-                   <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400 ml-1">Corporate HQ Locator</label><textarea rows={2} className="w-full bg-gray-50 border border-gray-200 p-4 rounded-2xl font-bold" value={config.branding.address} onChange={e => setConfig({...config, branding: {...config.branding, address: e.target.value}})} /></div>
-                </div>
-                <div className="space-y-6 pt-4">
-                   <h5 className="text-[10px] font-black uppercase tracking-widest text-gray-400">Resource Link Anchors</h5>
-                   <div className="grid grid-cols-2 gap-4">
-                      <input type="text" placeholder="Anchor Label" value={newResource.label} onChange={e => setNewResource({...newResource, label: e.target.value})} className="bg-gray-50 border p-3 rounded-xl font-bold text-[10px]" />
-                      <input type="text" placeholder="Target URL" value={newResource.url} onChange={e => setNewResource({...newResource, url: e.target.value})} className="bg-gray-50 border p-3 rounded-xl font-bold text-[10px]" />
-                      <textarea placeholder="Direct Content Segment (Optional)" value={newResource.content} onChange={e => setNewResource({...newResource, content: e.target.value})} className="col-span-2 bg-gray-50 border p-3 rounded-xl font-bold text-[10px]" />
-                      <button onClick={addResourceLink} className="col-span-2 bg-slate-900 text-white py-3 rounded-xl text-[9px] font-black uppercase tracking-widest">Register Anchor</button>
-                   </div>
-                   <div className="space-y-2">
-                      {(config.branding.resourceLinks || []).map((link, idx) => (
-                         <div key={idx} className="flex justify-between items-center bg-gray-50 p-4 rounded-2xl">
-                            <span className="text-[10px] font-black text-gray-900 uppercase">{link.label}</span>
-                            <button onClick={() => removeResourceLink(idx)} className="text-rose-500 hover:text-rose-700"><i className="fas fa-trash-alt"></i></button>
-                         </div>
-                      ))}
-                   </div>
-                </div>
-                <button onClick={handleConfigCommit} className="w-full bg-blue-600 text-white py-4 rounded-3xl font-black uppercase text-[10px] tracking-widest shadow-xl">Commit Communication Protocols</button>
-             </div>
-          </div>
-        </div>
-      );
-    }
-    if (activeTab === 'gateways_sys') {
-      const smsGateways = [
-        { id: 'twilio', label: 'Twilio', icon: 'fa-sms', fields: [
-          { key: 'sid', label: 'Account SID' },
-          { key: 'authToken', label: 'Auth Token' },
-          { key: 'fromNumber', label: 'Sender ID/Phone' }
-        ]},
-        { id: 'msg91', label: 'MSG91', icon: 'fa-paper-plane', fields: [
-          { key: 'authKey', label: 'Auth Key' },
-          { key: 'senderId', label: 'Sender ID' }
-        ]},
-        { id: 'textlocal', label: 'Textlocal', icon: 'fa-message', fields: [
-          { key: 'apiKey', label: 'API Key' },
-          { key: 'sender', label: 'Sender' }
-        ]}
-      ];
-
-      const emailGateways = [
-        { id: 'sendgrid', label: 'SendGrid', icon: 'fa-envelope-open-text', fields: [
-          { key: 'apiKey', label: 'API Key' },
-          { key: 'fromEmail', label: 'Verified Sender Email' }
-        ]},
-        { id: 'mailgun', label: 'Mailgun', icon: 'fa-envelope-circle-check', fields: [
-          { key: 'apiKey', label: 'API Key' },
-          { key: 'domain', label: 'Domain' },
-          { key: 'fromEmail', label: 'Sender Email' }
-        ]},
-        { id: 'ses', label: 'Amazon SES', icon: 'fa-aws', fields: [
-          { key: 'accessKey', label: 'Access Key' },
-          { key: 'secretKey', label: 'Secret Key' },
-          { key: 'region', label: 'AWS Region' },
-          { key: 'fromEmail', label: 'Verified Email' }
-        ]}
-      ];
-
-      return (
-        <div className="space-y-12 animate-in fade-in slide-in-from-bottom-4 pb-20">
-          {/* SMS Section */}
-          <div className="space-y-6">
-            <h4 className="text-[11px] font-black uppercase text-gray-400 tracking-[0.2em] ml-2">SMS & OTP Infrastructure</h4>
-            <div className="grid grid-cols-1 gap-6">
-               {smsGateways.map(gw => (
-                 <div key={gw.id} className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm">
-                    <div className="flex items-center justify-between mb-8 pb-6 border-b border-gray-50">
-                       <div className="flex items-center gap-5">
-                          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl ${config.smsGateway[gw.id as keyof SystemConfig['smsGateway']]?.active ? 'bg-blue-600 text-white shadow-xl shadow-blue-50' : 'bg-gray-100 text-gray-400'}`}>
-                             <i className={`fas ${gw.icon}`}></i>
-                          </div>
-                          <div>
-                             <h5 className="text-lg font-black uppercase text-gray-900">{gw.label}</h5>
-                             <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">OTP Delivery Node</p>
-                          </div>
-                       </div>
-                       <button 
-                         onClick={() => setConfig({
-                           ...config,
-                           smsGateway: { ...config.smsGateway, [gw.id]: { ...(config.smsGateway[gw.id as keyof SystemConfig['smsGateway']] as any), active: !(config.smsGateway[gw.id as keyof SystemConfig['smsGateway']] as any)?.active } }
-                         })}
-                         className={`w-14 h-7 rounded-full relative transition-all duration-300 ${config.smsGateway[gw.id as keyof SystemConfig['smsGateway']]?.active ? 'bg-blue-600' : 'bg-gray-300'}`}
-                       >
-                         <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all duration-300 ${config.smsGateway[gw.id as keyof SystemConfig['smsGateway']]?.active ? 'left-8' : 'left-1'}`}></div>
-                       </button>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                       {gw.fields.map(f => (
-                         <div key={f.key} className="space-y-1">
-                            <label className="text-[10px] font-black uppercase text-gray-400 ml-1">{f.label}</label>
-                            <input 
-                              type="password"
-                              className="w-full bg-gray-50 border border-gray-200 p-4 rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-blue-200 transition-all"
-                              value={(config.smsGateway[gw.id as keyof SystemConfig['smsGateway']] as any)?.[f.key] || ''}
-                              onChange={e => {
-                                setConfig({
-                                  ...config,
-                                  smsGateway: { ...config.smsGateway, [gw.id]: { ...(config.smsGateway[gw.id as keyof SystemConfig['smsGateway']] as any), [f.key]: e.target.value } }
-                                });
-                              }}
-                            />
-                         </div>
-                       ))}
-                    </div>
-                 </div>
-               ))}
-            </div>
-          </div>
-
-          {/* Email Section */}
-          <div className="space-y-6">
-            <h4 className="text-[11px] font-black uppercase text-gray-400 tracking-[0.2em] ml-2">Email Verification Cluster</h4>
-            <div className="grid grid-cols-1 gap-6">
-               {emailGateways.map(gw => (
-                 <div key={gw.id} className="bg-white p-8 rounded-[3rem] border border-gray-100 shadow-sm">
-                    <div className="flex items-center justify-between mb-8 pb-6 border-b border-gray-50">
-                       <div className="flex items-center gap-5">
-                          <div className={`w-14 h-14 rounded-2xl flex items-center justify-center text-xl ${config.emailGateway[gw.id as keyof SystemConfig['emailGateway']]?.active ? 'bg-emerald-600 text-white shadow-xl shadow-emerald-50' : 'bg-gray-100 text-gray-400'}`}>
-                             <i className={`fas ${gw.icon}`}></i>
-                          </div>
-                          <div>
-                             <h5 className="text-lg font-black uppercase text-gray-900">{gw.label}</h5>
-                             <p className="text-[9px] font-bold text-gray-400 uppercase tracking-widest">Identity Validation Service</p>
-                          </div>
-                       </div>
-                       <button 
-                         onClick={() => setConfig({
-                           ...config,
-                           emailGateway: { ...config.emailGateway, [gw.id]: { ...(config.emailGateway[gw.id as keyof SystemConfig['emailGateway']] as any), active: !(config.emailGateway[gw.id as keyof SystemConfig['emailGateway']] as any)?.active } }
-                         })}
-                         className={`w-14 h-7 rounded-full relative transition-all duration-300 ${config.emailGateway[gw.id as keyof SystemConfig['emailGateway']]?.active ? 'bg-emerald-600' : 'bg-gray-300'}`}
-                       >
-                         <div className={`absolute top-1 w-5 h-5 bg-white rounded-full transition-all duration-300 ${config.emailGateway[gw.id as keyof SystemConfig['emailGateway']]?.active ? 'left-8' : 'left-1'}`}></div>
-                       </button>
-                    </div>
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                       {gw.fields.map(f => (
-                         <div key={f.key} className="space-y-1">
-                            <label className="text-[10px] font-black uppercase text-gray-400 ml-1">{f.label}</label>
-                            <input 
-                              type="password"
-                              className="w-full bg-gray-50 border border-gray-200 p-4 rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-emerald-200 transition-all"
-                              value={(config.emailGateway[gw.id as keyof SystemConfig['emailGateway']] as any)?.[f.key] || ''}
-                              onChange={e => {
-                                setConfig({
-                                  ...config,
-                                  emailGateway: { ...config.emailGateway, [gw.id]: { ...(config.emailGateway[gw.id as keyof SystemConfig['emailGateway']] as any), [f.key]: e.target.value } }
-                                });
-                              }}
-                            />
-                         </div>
-                       ))}
-                    </div>
-                 </div>
-               ))}
-            </div>
-          </div>
-
-          <div className="bg-slate-900 p-10 rounded-[3rem] shadow-2xl flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden">
-             <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500 rounded-full blur-[120px] opacity-10"></div>
-             <div>
-                <h4 className="text-xl font-black text-white uppercase tracking-tight">Sync Communication Stack</h4>
-                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-2">Updating gateway logic will immediately re-route OTP and Verification clusters</p>
-             </div>
-             <button 
-                onClick={handleConfigCommit}
-                disabled={isProcessing}
-                className="w-full md:w-auto bg-blue-600 text-white px-12 py-5 rounded-[2rem] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-blue-500/20 hover:bg-blue-500 transition-all active:scale-[0.98]"
-             >
-                {isProcessing ? <i className="fas fa-circle-notch fa-spin mr-2"></i> : <i className="fas fa-satellite-dish mr-2"></i>}
-                Commit Communication Protocols
-             </button>
-          </div>
-        </div>
-      );
-    }
-    if (activeTab === 'cleanup') {
-        return (
-            <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 pb-20">
-                <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-10">
-                    <div className="flex justify-between items-center border-b border-gray-50 pb-6">
-                        <div>
-                            <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-500">Platform Data Cleanup</h4>
-                            <p className="text-[9px] font-bold text-gray-400 mt-1 uppercase">Permanently remove legacy inventory assets</p>
-                        </div>
-                        <div className="w-12 h-12 bg-rose-50 rounded-2xl flex items-center justify-center text-rose-500">
-                            <i className="fas fa-broom text-xl"></i>
-                        </div>
-                    </div>
-
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
-                        <div className="space-y-1">
-                            <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Legacy Duration</label>
-                            <select 
-                                className="w-full bg-gray-50 border border-gray-200 p-4 rounded-2xl font-bold text-sm outline-none focus:bg-white transition-all"
-                                value={cleanupMonths}
-                                onChange={e => setCleanupMonths(Number(e.target.value))}
-                            >
-                                <option value={1}>Older than 1 Month</option>
-                                <option value={3}>Older than 3 Months</option>
-                                <option value={6}>Older than 6 Months</option>
-                                <option value={12}>Older than 1 Year</option>
-                            </select>
-                        </div>
-
-                        <div className="space-y-1">
-                            <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Target City Node</label>
-                            <select 
-                                className="w-full bg-gray-50 border border-gray-200 p-4 rounded-2xl font-bold text-sm outline-none focus:bg-white transition-all"
-                                value={cleanupCityId}
-                                onChange={e => setCleanupCityId(e.target.value)}
-                            >
-                                <option value="ALL">All Cities (Global)</option>
-                                {cities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
-                            </select>
-                        </div>
-
-                        <div className="space-y-1">
-                            <label className="text-[10px] font-black uppercase text-gray-400 ml-1">User Protocol Filter</label>
-                            <select 
-                                className="w-full bg-gray-50 border border-gray-200 p-4 rounded-2xl font-bold text-sm outline-none focus:bg-white transition-all"
-                                value={cleanupUserType}
-                                onChange={e => setCleanupUserType(e.target.value as any)}
-                            >
-                                <option value="ALL">All Entities</option>
-                                <option value="VERIFIED">Verified Entities Only</option>
-                                <option value="PROFESSIONAL">Professional Roles Only</option>
-                            </select>
-                        </div>
-                    </div>
-
-                    <div className="bg-slate-900 p-10 rounded-[2.5rem] relative overflow-hidden flex flex-col md:flex-row items-center justify-between gap-8">
-                        <div className="absolute top-0 left-0 w-full h-full bg-blue-500/5 pointer-events-none"></div>
-                        <div className="relative z-10 text-center md:text-left">
-                            <h5 className="text-3xl font-black text-white">{filteredCleanupAds.length}</h5>
-                            <p className="text-[10px] font-black uppercase tracking-widest text-slate-400">Target Legacy Assets Identified</p>
-                        </div>
-                        <button 
-                            onClick={handleExecuteCleanup}
-                            disabled={isProcessing || filteredCleanupAds.length === 0}
-                            className="relative z-10 w-full md:w-auto bg-rose-600 text-white px-12 py-5 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-2xl shadow-rose-900/20 hover:bg-rose-500 transition-all disabled:opacity-30 disabled:cursor-not-allowed flex items-center justify-center gap-3 active:scale-[0.98]"
-                        >
-                            {isProcessing ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-trash-alt"></i>}
-                            Execute System Purge
-                        </button>
-                    </div>
-
-                    <div className="bg-amber-50 border border-amber-100 p-6 rounded-[2rem] flex gap-4">
-                        <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-amber-500 shadow-sm flex-shrink-0">
-                            <i className="fas fa-exclamation-triangle"></i>
-                        </div>
-                        <div>
-                            <p className="text-[10px] font-black text-amber-900 uppercase">Warning: Permanent Action</p>
-                            <p className="text-[9px] text-amber-700/70 mt-1 leading-relaxed">Executing cleanup will permanently remove image assets and marketplace history for selected items. Use with caution for data integrity.</p>
-                        </div>
-                    </div>
-                </div>
-            </div>
-        );
-    }
-    if (activeTab === 'logs') {
-      return (
-        <div className="space-y-6 animate-in fade-in pb-20">
-           <div className="bg-slate-900 rounded-[3rem] border border-slate-800 overflow-hidden shadow-2xl">
-              <div className="p-8 border-b border-slate-800 flex justify-between items-center">
-                 <h4 className="text-[10px] font-black uppercase tracking-widest text-emerald-400">Real-time Platform Audit Log</h4>
-                 <span className="text-[9px] font-bold text-slate-500 uppercase">Live Flux Interface</span>
-              </div>
-              <div className="overflow-x-auto custom-scrollbar">
-                 <table className="w-full text-left min-w-[800px]">
-                    <thead>
-                       <tr className="text-[10px] font-black uppercase text-slate-600 border-b border-slate-800">
-                          <th className="px-8 py-5">Delta Time</th>
-                          <th className="px-8 py-5">Source Node (IP)</th>
-                          <th className="px-8 py-5">System Action</th>
-                          <th className="px-8 py-5">Severity Level</th>
-                          <th className="px-8 py-5">Operational Details</th>
-                       </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-800">
-                       {[...logs].reverse().slice(0, 50).map(log => (
-                          <tr key={log.id} className="font-mono text-[10px] hover:bg-slate-800/50 transition-colors">
-                             <td className="px-8 py-4 text-slate-500">{new Date(log.timestamp).toLocaleTimeString()}</td>
-                             <td className="px-8 py-4 text-slate-400">{log.ip}</td>
-                             <td className="px-8 py-4 text-emerald-500 font-bold uppercase">{log.action}</td>
-                             <td className="px-8 py-4">
-                                <span className={`px-2 py-0.5 rounded-full text-[8px] font-black uppercase ${
-                                  log.severity === 'CRITICAL' ? 'bg-rose-500 text-white' :
-                                  log.severity === 'HIGH' ? 'bg-orange-500 text-white' :
-                                  log.severity === 'MEDIUM' ? 'bg-amber-500 text-white' : 'bg-emerald-500 text-white'
-                                }`}>{log.severity}</span>
-                             </td>
-                             <td className="px-8 py-4 text-slate-500 italic max-w-xs truncate">{log.details}</td>
-                          </tr>
-                       ))}
-                       {logs.length === 0 && (
-                          <tr><td colSpan={5} className="px-8 py-20 text-center text-slate-600 text-xs italic">Audit Stream Synchronizing... No nodes found.</td></tr>
-                       )}
-                    </tbody>
-                 </table>
-              </div>
+              <div className="text-right"><button onClick={handleConfigCommit} disabled={isProcessing} className="bg-slate-900 text-white px-8 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-black transition-all">Update Pricing Model</button></div>
            </div>
         </div>
       );
     }
+    if (activeTab === 'banner_ads') {
+       return (
+        <div className="space-y-6 max-w-4xl">
+           <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-6">
+              <h3 className="text-xl font-black uppercase text-gray-900">City Sponsorship Rates</h3>
+              <div className="grid grid-cols-2 gap-6">
+                 <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Default Rate</label><input type="number" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold text-sm" value={config.bannerAdPrice} onChange={e => setConfig({...config, bannerAdPrice: Number(e.target.value)})} /></div>
+                 <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Duration Cycle (Days)</label><input type="number" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold text-sm" value={config.bannerAdDurationDays} onChange={e => setConfig({...config, bannerAdDurationDays: Number(e.target.value)})} /></div>
+              </div>
+              <h4 className="text-sm font-black uppercase text-blue-500 mt-4 border-b border-gray-100 pb-2">Tiered Pricing Multipliers</h4>
+              <div className="grid grid-cols-3 gap-6">
+                 <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Tier 1 (Metro)</label><input type="number" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold text-sm" value={config.bannerAdTierPrices.T1} onChange={e => setConfig({...config, bannerAdTierPrices: {...config.bannerAdTierPrices, T1: Number(e.target.value)}})} /></div>
+                 <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Tier 2 (Urban)</label><input type="number" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold text-sm" value={config.bannerAdTierPrices.T2} onChange={e => setConfig({...config, bannerAdTierPrices: {...config.bannerAdTierPrices, T2: Number(e.target.value)}})} /></div>
+                 <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Tier 3 (Town)</label><input type="number" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold text-sm" value={config.bannerAdTierPrices.T3} onChange={e => setConfig({...config, bannerAdTierPrices: {...config.bannerAdTierPrices, T3: Number(e.target.value)}})} /></div>
+              </div>
+              <div className="text-right"><button onClick={handleConfigCommit} disabled={isProcessing} className="bg-slate-900 text-white px-8 py-3 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-black transition-all">Update Sponsorship Rates</button></div>
+           </div>
+        </div>
+       )
+    }
+    if (activeTab === 'banner_inventory') {
+        return (
+            <div className="space-y-4">
+                {banners.map(b => (
+                    <div key={b.id} className="bg-white p-6 rounded-[2rem] border border-gray-100 flex gap-4 items-center">
+                        <img src={b.imageUrl} className="w-32 h-16 object-cover rounded-xl bg-gray-100" />
+                        <div className="flex-1">
+                            <h5 className="font-black text-gray-900 uppercase">{b.title}</h5>
+                            <p className="text-xs text-gray-500">{getCityName(b.cityId)} • {b.status}</p>
+                        </div>
+                        <div className="text-right">
+                             <p className="text-lg font-black text-blue-600">₹{b.amountPaid}</p>
+                             <p className="text-[9px] font-black uppercase text-gray-400">Paid</p>
+                        </div>
+                    </div>
+                ))}
+                {banners.length === 0 && <p className="text-center text-gray-400 text-xs uppercase font-black py-10">No active inventory.</p>}
+            </div>
+        )
+    }
+    return <div className="p-10 text-center text-gray-400 font-bold uppercase text-xs">Module Under Construction</div>
+  }
+
+  const renderGeoCats = () => {
+      if (activeTab === 'location_mgmt') {
+          return (
+              <div className="space-y-10">
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                      {/* Countries */}
+                      <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-4">
+                          <h4 className="text-sm font-black uppercase text-blue-600">1. Countries</h4>
+                          <div className="space-y-2 h-48 overflow-y-auto custom-scrollbar pr-2">
+                              {countries.map(c => (
+                                  <div key={c.id} className="p-3 bg-gray-50 rounded-xl flex justify-between items-center text-xs font-bold">
+                                      <span>{c.name}</span><span className="text-gray-400">{c.code}</span>
+                                  </div>
+                              ))}
+                          </div>
+                          <form onSubmit={handleCountryAdd} className="pt-4 border-t border-gray-100 space-y-2">
+                              <input type="text" placeholder="Name" className="w-full bg-gray-50 border p-2 rounded-xl text-xs font-bold" value={countryAddForm.name} onChange={e => setCountryAddForm({...countryAddForm, name: e.target.value})} />
+                              <input type="text" placeholder="Code (e.g. IN)" className="w-full bg-gray-50 border p-2 rounded-xl text-xs font-bold uppercase" maxLength={2} value={countryAddForm.code} onChange={e => setCountryAddForm({...countryAddForm, code: e.target.value})} />
+                              <button type="submit" disabled={isProcessing} className="w-full bg-blue-600 text-white py-2 rounded-xl text-[9px] font-black uppercase">Add Country</button>
+                          </form>
+                      </div>
+
+                      {/* States */}
+                      <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-4">
+                          <h4 className="text-sm font-black uppercase text-blue-600">2. States</h4>
+                          <div className="space-y-2 h-48 overflow-y-auto custom-scrollbar pr-2">
+                              {states.map(s => (
+                                  <div key={s.id} className="p-3 bg-gray-50 rounded-xl flex justify-between items-center text-xs font-bold">
+                                      <span>{s.name}</span>
+                                  </div>
+                              ))}
+                          </div>
+                          <form onSubmit={handleStateAdd} className="pt-4 border-t border-gray-100 space-y-2">
+                              <select className="w-full bg-gray-50 border p-2 rounded-xl text-xs font-bold" value={stateAddForm.countryId} onChange={e => setStateAddForm({...stateAddForm, countryId: e.target.value})}>
+                                  <option value="">Select Country</option>
+                                  {countries.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                              </select>
+                              <input type="text" placeholder="State Name" className="w-full bg-gray-50 border p-2 rounded-xl text-xs font-bold" value={stateAddForm.name} onChange={e => setStateAddForm({...stateAddForm, name: e.target.value})} />
+                              <button type="submit" disabled={isProcessing} className="w-full bg-blue-600 text-white py-2 rounded-xl text-[9px] font-black uppercase">Add State</button>
+                          </form>
+                      </div>
+
+                      {/* Cities */}
+                      <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm space-y-4">
+                          <h4 className="text-sm font-black uppercase text-blue-600">3. Cities</h4>
+                          <div className="space-y-2 h-48 overflow-y-auto custom-scrollbar pr-2">
+                              {cities.map(c => (
+                                  <div key={c.id} className="p-3 bg-gray-50 rounded-xl flex justify-between items-center text-xs font-bold group">
+                                      <div className="flex items-center gap-2">
+                                        <div onClick={() => handleCityToggle(c.id, !!c.isActive)} className={`w-2 h-2 rounded-full cursor-pointer ${c.isActive ? 'bg-emerald-500' : 'bg-gray-300'}`}></div>
+                                        <span>{c.name}</span>
+                                      </div>
+                                      <select 
+                                        className="bg-white border border-gray-200 rounded text-[9px] font-black uppercase p-1 w-12"
+                                        value={cityTiers[c.id] || 'T2'}
+                                        onChange={(e) => handleCityTierChange(c.id, e.target.value as any)}
+                                      >
+                                          <option value="T1">T1</option><option value="T2">T2</option><option value="T3">T3</option>
+                                      </select>
+                                  </div>
+                              ))}
+                          </div>
+                          <form onSubmit={handleCityAdd} className="pt-4 border-t border-gray-100 space-y-2">
+                              <div className="flex gap-2">
+                                <select className="w-1/2 bg-gray-50 border p-2 rounded-xl text-[10px] font-bold" value={cityAddForm.countryId} onChange={e => {
+                                    setCityAddForm({...cityAddForm, countryId: e.target.value, stateId: ''});
+                                    setFormStates(dbService.getStates(e.target.value));
+                                }}>
+                                    <option value="">Country</option>
+                                    {countries.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                </select>
+                                <select className="w-1/2 bg-gray-50 border p-2 rounded-xl text-[10px] font-bold" value={cityAddForm.stateId} onChange={e => setCityAddForm({...cityAddForm, stateId: e.target.value})}>
+                                    <option value="">State</option>
+                                    {formStates.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                </select>
+                              </div>
+                              <div className="flex gap-2">
+                                <input type="text" placeholder="City Name" className="w-2/3 bg-gray-50 border p-2 rounded-xl text-xs font-bold" value={cityAddForm.name} onChange={e => setCityAddForm({...cityAddForm, name: e.target.value})} />
+                                <select className="w-1/3 bg-gray-50 border p-2 rounded-xl text-[10px] font-bold" value={cityAddForm.tier} onChange={e => setCityAddForm({...cityAddForm, tier: e.target.value as any})}>
+                                    <option value="T1">T1</option><option value="T2">T2</option><option value="T3">T3</option>
+                                </select>
+                              </div>
+                              <button type="submit" disabled={isProcessing} className="w-full bg-blue-600 text-white py-2 rounded-xl text-[9px] font-black uppercase">Add City</button>
+                          </form>
+                      </div>
+                  </div>
+              </div>
+          )
+      }
+      if (activeTab === 'category_mgmt') {
+          return (
+              <div className="max-w-4xl mx-auto space-y-6">
+                  <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm">
+                      <h4 className="text-sm font-black uppercase text-gray-900 mb-6">Taxonomy Management</h4>
+                      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+                          {categories.map(cat => (
+                              <div key={cat.id} className="p-4 bg-gray-50 rounded-2xl border border-gray-100 flex justify-between items-center group hover:bg-white hover:shadow-lg transition-all">
+                                  <div className="flex items-center gap-2">
+                                      <i className={`fas ${cat.icon} text-gray-400 group-hover:text-blue-500`}></i>
+                                      <span className="text-xs font-bold text-gray-700">{cat.name}</span>
+                                  </div>
+                                  <button onClick={() => { setCatForm(cat); setIsEditingCat(true); }} className="text-gray-300 hover:text-blue-600"><i className="fas fa-pen text-xs"></i></button>
+                              </div>
+                          ))}
+                      </div>
+                      <form onSubmit={handleCategoryAction} className="p-6 bg-gray-50 rounded-3xl border border-gray-100 flex gap-4 items-end">
+                          <div className="flex-1 space-y-1">
+                              <label className="text-[10px] font-black uppercase text-gray-400">Category Name</label>
+                              <input type="text" required className="w-full bg-white border border-gray-200 p-3 rounded-xl text-sm font-bold" value={catForm.name} onChange={e => setCatForm({...catForm, name: e.target.value})} />
+                          </div>
+                          <div className="flex-1 space-y-1">
+                              <label className="text-[10px] font-black uppercase text-gray-400">Icon Class (FontAwesome)</label>
+                              <input type="text" required className="w-full bg-white border border-gray-200 p-3 rounded-xl text-sm font-bold" placeholder="fa-tag" value={catForm.icon} onChange={e => setCatForm({...catForm, icon: e.target.value})} />
+                          </div>
+                          <div className="flex gap-2">
+                              {isEditingCat && <button type="button" onClick={() => { setIsEditingCat(false); setCatForm({id:'',name:'',icon:''}); }} className="px-6 py-3 bg-gray-200 text-gray-600 rounded-xl text-[10px] font-black uppercase">Cancel</button>}
+                              <button type="submit" disabled={isProcessing} className="px-8 py-3 bg-slate-900 text-white rounded-xl text-[10px] font-black uppercase">{isEditingCat ? 'Update' : 'Create'}</button>
+                          </div>
+                      </form>
+                  </div>
+              </div>
+          )
+      }
+      return null;
+  }
+
+  const renderUsersModule = () => {
+    const filteredUsers = users.filter(u => {
+      const matchSearch = u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.email.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchRole = userFilterRole === 'ALL' || u.role === userFilterRole;
+      const matchVerif = activeTab === 'verification' ? !u.isVerified : true; // Simple logic for queue
+      return matchSearch && matchRole && matchVerif;
+    });
+
+    return (
+        <div className="space-y-6">
+            <div className="flex justify-between items-center bg-white p-4 rounded-[2rem] border border-gray-100 shadow-sm">
+                <input type="text" placeholder="Search users by name or email..." className="flex-1 bg-transparent px-4 text-sm font-bold outline-none" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                <select className="bg-gray-50 border border-gray-100 rounded-xl text-[10px] font-black uppercase px-4 py-2 outline-none" value={userFilterRole} onChange={e => setUserFilterRole(e.target.value)}>
+                    <option value="ALL">All Roles</option>
+                    <option value="USER">User</option>
+                    <option value="MODERATOR">Moderator</option>
+                    <option value="ADMIN">Admin</option>
+                </select>
+            </div>
+            <div className="bg-white rounded-[2.5rem] border border-gray-100 shadow-sm overflow-hidden">
+                <table className="w-full text-left">
+                    <thead className="bg-gray-50 border-b border-gray-100">
+                        <tr>
+                            <th className="px-8 py-4 text-[10px] font-black uppercase text-gray-400">User Identity</th>
+                            <th className="px-8 py-4 text-[10px] font-black uppercase text-gray-400">Role</th>
+                            <th className="px-8 py-4 text-[10px] font-black uppercase text-gray-400">Status</th>
+                            <th className="px-8 py-4 text-[10px] font-black uppercase text-gray-400">Wallet</th>
+                            <th className="px-8 py-4 text-[10px] font-black uppercase text-gray-400 text-right">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody className="divide-y divide-gray-50">
+                        {filteredUsers.map(u => (
+                            <tr key={u.id} className="hover:bg-blue-50/50 transition-colors group">
+                                <td className="px-8 py-4">
+                                    <div className="flex items-center gap-3">
+                                        <img src={u.photo} className="w-8 h-8 rounded-full bg-gray-200" />
+                                        <div>
+                                            <p className="text-xs font-black text-gray-900">{u.name}</p>
+                                            <p className="text-[9px] font-bold text-gray-400">{u.email}</p>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td className="px-8 py-4"><span className="text-[9px] font-black uppercase bg-gray-100 px-2 py-0.5 rounded text-gray-600">{u.role}</span></td>
+                                <td className="px-8 py-4">
+                                    {u.isSuspended ? <span className="text-rose-500 font-black text-[9px] uppercase">Suspended</span> : (u.isVerified ? <span className="text-blue-500 font-black text-[9px] uppercase">Verified</span> : <span className="text-gray-400 font-black text-[9px] uppercase">Active</span>)}
+                                </td>
+                                <td className="px-8 py-4 font-mono font-bold text-xs">₹{u.walletBalance.toLocaleString()}</td>
+                                <td className="px-8 py-4 text-right">
+                                    <button onClick={() => setSelectedUserId(u.id)} className="text-gray-300 hover:text-blue-600 font-black text-[10px] uppercase border border-gray-200 hover:border-blue-200 px-3 py-1 rounded-lg transition-all">Manage</button>
+                                </td>
+                            </tr>
+                        ))}
+                    </tbody>
+                </table>
+                {filteredUsers.length === 0 && <div className="p-10 text-center text-gray-400 font-bold uppercase text-xs">No users found matching criteria.</div>}
+            </div>
+        </div>
+    );
+  }
+
+  const renderListings = () => {
+      const filteredListings = listings.filter(l => {
+          const matchStatus = listingFilterStatus === 'ALL' || l.status === listingFilterStatus;
+          const matchCat = listingFilterCategory === 'ALL' || l.category === listingFilterCategory;
+          const matchTab = activeTab === 'pending' ? (l.status === 'PENDING' || l.status === 'EDIT_PENDING') : true;
+          return matchStatus && matchCat && matchTab;
+      });
+
+      return (
+          <div className="space-y-6">
+              <div className="flex gap-4 bg-white p-4 rounded-[2rem] border border-gray-100 shadow-sm">
+                  <select className="bg-gray-50 border border-gray-100 rounded-xl text-[10px] font-black uppercase px-4 py-2 outline-none" value={listingFilterCategory} onChange={e => setListingFilterCategory(e.target.value)}>
+                      <option value="ALL">All Categories</option>
+                      {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                  </select>
+                  {activeTab === 'master' && (
+                      <select className="bg-gray-50 border border-gray-100 rounded-xl text-[10px] font-black uppercase px-4 py-2 outline-none" value={listingFilterStatus} onChange={e => setListingFilterStatus(e.target.value)}>
+                          <option value="ALL">All Statuses</option>
+                          <option value="APPROVED">Live</option>
+                          <option value="PENDING">Pending</option>
+                          <option value="REJECTED">Rejected</option>
+                          <option value="DISABLED">Disabled</option>
+                      </select>
+                  )}
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+                  {filteredListings.map(l => (
+                      <div key={l.id} className="bg-white p-4 rounded-[2rem] border border-gray-100 hover:shadow-xl transition-all group flex flex-col">
+                          <div className="relative h-40 rounded-2xl overflow-hidden mb-4">
+                              <img src={l.images[0]} className="w-full h-full object-cover" />
+                              <div className="absolute top-2 left-2 bg-black/50 backdrop-blur-md text-white px-2 py-0.5 rounded text-[8px] font-black uppercase">{l.status}</div>
+                              {l.isPremium && <div className="absolute bottom-2 right-2 bg-yellow-400 text-yellow-900 px-2 py-0.5 rounded text-[8px] font-black uppercase"><i className="fas fa-crown"></i></div>}
+                          </div>
+                          <h4 className="font-black text-gray-900 text-sm line-clamp-1">{l.title}</h4>
+                          <p className="text-xs font-bold text-gray-500 mt-1">₹{l.price.toLocaleString()}</p>
+                          <div className="mt-4 flex gap-2">
+                              <button onClick={() => { setSelectedListingId(l.id); setDetailListing(l); }} className="flex-1 bg-gray-50 hover:bg-blue-50 text-blue-600 py-2 rounded-xl text-[9px] font-black uppercase transition-colors">Inspect</button>
+                              <button onClick={() => { if(onViewAd) onViewAd(l); }} className="w-10 bg-gray-50 hover:bg-gray-100 text-gray-400 py-2 rounded-xl text-[9px] font-black uppercase transition-colors"><i className="fas fa-external-link-alt"></i></button>
+                          </div>
+                      </div>
+                  ))}
+                  {filteredListings.length === 0 && <div className="col-span-3 text-center py-10 text-gray-400 text-xs font-bold uppercase">No inventory matches filter.</div>}
+              </div>
+          </div>
+      )
+  }
+
+  const renderSystem = () => {
+    if (activeTab === 'logs') {
+        return (
+            <div className="bg-black text-green-400 p-8 rounded-[2rem] font-mono text-xs h-[600px] overflow-y-auto shadow-2xl">
+                {logs.length === 0 ? <p className="opacity-50">// System logs are empty.</p> : logs.map(log => (
+                    <div key={log.id} className="mb-2 border-b border-green-900/30 pb-2">
+                        <span className="opacity-50">[{new Date(log.timestamp).toISOString()}]</span> <span className="text-blue-400">[{log.severity}]</span> {log.action} - {log.details} <span className="opacity-30">@{log.ip}</span>
+                    </div>
+                ))}
+            </div>
+        )
+    }
+    if (activeTab === 'cleanup') {
+        return (
+            <div className="max-w-2xl mx-auto space-y-8">
+                <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm text-center">
+                    <div className="w-20 h-20 bg-rose-50 rounded-full flex items-center justify-center mx-auto mb-6 text-rose-500 text-3xl"><i className="fas fa-broom"></i></div>
+                    <h3 className="text-xl font-black text-gray-900 uppercase">System Maintenance Purge</h3>
+                    <p className="text-gray-500 text-sm mt-2 max-w-md mx-auto">Permanently remove listing assets that exceed retention policies.</p>
+                    
+                    <div className="mt-8 space-y-4 text-left">
+                        <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Retention Period (Months)</label><input type="number" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold" value={cleanupMonths} onChange={e => setCleanupMonths(Number(e.target.value))} /></div>
+                        <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">City Scope</label>
+                            <select className="w-full bg-gray-50 border p-4 rounded-2xl font-bold text-xs" value={cleanupCityId} onChange={e => setCleanupCityId(e.target.value)}>
+                                <option value="ALL">All Cities</option>
+                                {cities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                        </div>
+                        <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Target User Type</label>
+                            <select className="w-full bg-gray-50 border p-4 rounded-2xl font-bold text-xs" value={cleanupUserType} onChange={e => setCleanupUserType(e.target.value as any)}>
+                                <option value="ALL">All Users</option>
+                                <option value="VERIFIED">Verified Only</option>
+                                <option value="PROFESSIONAL">Admins/Mods Only</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div className="mt-8 p-4 bg-rose-50 rounded-2xl border border-rose-100">
+                        <p className="text-rose-700 font-bold text-xs">Matching Inventory: {filteredCleanupAds.length} Listings</p>
+                    </div>
+
+                    <button onClick={handleExecuteCleanup} disabled={isProcessing || filteredCleanupAds.length === 0} className="w-full mt-6 bg-rose-600 text-white py-5 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-rose-100 hover:bg-rose-700 transition-all">Execute Purge Sequence</button>
+                </div>
+            </div>
+        )
+    }
+    if (activeTab === 'site') {
+        return (
+            <div className="max-w-4xl mx-auto bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-8">
+                 <h4 className="text-sm font-black uppercase text-gray-900 border-b border-gray-100 pb-4">Brand Assets</h4>
+                 <div className="grid grid-cols-2 gap-8">
+                     <div className="space-y-2">
+                         <label className="text-[10px] font-black uppercase text-gray-400">Site Identity</label>
+                         <input type="text" className="w-full bg-gray-50 border p-3 rounded-xl text-sm font-bold" value={config.siteName} onChange={e => setConfig({...config, siteName: e.target.value})} />
+                         <input type="text" className="w-full bg-gray-50 border p-3 rounded-xl text-sm font-bold" value={config.branding.siteTagline} onChange={e => setConfig({...config, branding: {...config.branding, siteTagline: e.target.value}})} placeholder="Tagline" />
+                     </div>
+                     <div className="space-y-2">
+                         <label className="text-[10px] font-black uppercase text-gray-400">Contact</label>
+                         <input type="text" className="w-full bg-gray-50 border p-3 rounded-xl text-sm font-bold" value={config.branding.supportEmail} onChange={e => setConfig({...config, branding: {...config.branding, supportEmail: e.target.value}})} placeholder="Email" />
+                         <input type="text" className="w-full bg-gray-50 border p-3 rounded-xl text-sm font-bold" value={config.branding.supportPhone} onChange={e => setConfig({...config, branding: {...config.branding, supportPhone: e.target.value}})} placeholder="Phone" />
+                     </div>
+                 </div>
+
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-gray-400">Logos</label>
+                    <div className="flex gap-4">
+                        <div className="flex-1 relative h-24 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden group">
+                             {config.logoUrl ? <img src={config.logoUrl} className="h-full object-contain" /> : <span className="text-gray-400 text-xs font-bold uppercase">Main Logo</span>}
+                             <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={e => handleConfigLogoUpload(e, 'logoUrl')} />
+                        </div>
+                        <div className="flex-1 relative h-24 bg-gray-50 rounded-2xl border-2 border-dashed border-gray-200 flex items-center justify-center overflow-hidden group">
+                             {config.branding.pwaIcon ? <img src={config.branding.pwaIcon} className="h-full object-contain" /> : <span className="text-gray-400 text-xs font-bold uppercase">App Icon</span>}
+                             <input type="file" className="absolute inset-0 opacity-0 cursor-pointer" onChange={e => handleConfigLogoUpload(e, 'branding.pwaIcon')} />
+                        </div>
+                    </div>
+                 </div>
+
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-gray-400">Footer Resource Links</label>
+                    <div className="space-y-2">
+                        {(config.branding.resourceLinks || []).map((link, i) => (
+                            <div key={i} className="flex gap-2 items-center">
+                                <span className="bg-gray-100 px-3 py-2 rounded-lg text-xs font-bold text-gray-600 flex-1">{link.label}</span>
+                                <button onClick={() => removeResourceLink(i)} className="text-rose-500 hover:text-rose-700 px-2"><i className="fas fa-trash"></i></button>
+                            </div>
+                        ))}
+                    </div>
+                    <div className="flex gap-2 pt-2">
+                        <input type="text" placeholder="Label" className="w-1/3 bg-gray-50 border p-2 rounded-xl text-xs font-bold" value={newResource.label} onChange={e => setNewResource({...newResource, label: e.target.value})} />
+                        <input type="text" placeholder="URL (# for internal)" className="w-1/3 bg-gray-50 border p-2 rounded-xl text-xs font-bold" value={newResource.url} onChange={e => setNewResource({...newResource, url: e.target.value})} />
+                        <button onClick={addResourceLink} className="w-1/3 bg-gray-200 text-gray-600 rounded-xl text-[10px] font-black uppercase hover:bg-gray-300">Add Link</button>
+                    </div>
+                    <textarea placeholder="Page Content (Markdown supported for internal pages)" className="w-full bg-gray-50 border p-3 rounded-xl text-xs font-medium h-24" value={newResource.content || ''} onChange={e => setNewResource({...newResource, content: e.target.value})} />
+                 </div>
+
+                 <button onClick={handleConfigCommit} disabled={isProcessing} className="w-full bg-slate-900 text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl">Save Configuration</button>
+            </div>
+        )
+    }
     return null;
-  };
+  }
+
+  const renderListingDetailModal = () => {
+    if (!detailListing || !selectedListingId) return null;
+    return (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-6 bg-gray-900/60 backdrop-blur-sm animate-in fade-in">
+             <div className="bg-white w-full max-w-5xl rounded-[3rem] shadow-2xl overflow-hidden animate-in zoom-in-95 h-[90vh] flex flex-col">
+                 <div className="p-8 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
+                     <div>
+                         <h3 className="text-2xl font-black text-gray-900">Listing Inspector</h3>
+                         <p className="text-xs text-gray-400 font-bold uppercase mt-1">ID: {detailListing.id}</p>
+                     </div>
+                     <button onClick={() => setSelectedListingId(null)} className="w-10 h-10 bg-white rounded-xl flex items-center justify-center shadow-sm text-gray-400 hover:text-rose-500 transition-colors"><i className="fas fa-times"></i></button>
+                 </div>
+                 <div className="flex-1 overflow-y-auto p-10 custom-scrollbar space-y-8">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                          {/* Media Preview Section */}
+                          <div className="space-y-6">
+                              <label className="text-[10px] font-black uppercase text-gray-400">Media Assets</label>
+                              <div className="grid grid-cols-2 gap-4">
+                                  {detailListing.images.map((img, i) => (
+                                      <div key={i} className="aspect-square rounded-2xl overflow-hidden bg-gray-50 border border-gray-100 shadow-sm group relative">
+                                          <img src={img} className="w-full h-full object-cover" />
+                                          <div className="absolute inset-0 bg-black/20 opacity-0 group-hover:opacity-100 transition-opacity"></div>
+                                      </div>
+                                  ))}
+                              </div>
+                              <div className="bg-gray-50 p-6 rounded-3xl border border-gray-100 space-y-4">
+                                  <div className="flex justify-between items-center">
+                                      <span className="text-[10px] font-black uppercase text-gray-400">Views Counter</span>
+                                      <span className="text-xs font-black text-blue-600 bg-blue-50 px-2 py-0.5 rounded">{detailListing.views} Impressions</span>
+                                  </div>
+                                  <div className="flex justify-between items-center">
+                                      <span className="text-[10px] font-black uppercase text-gray-400">Submission Date</span>
+                                      <span className="text-xs font-bold text-gray-700">{new Date(detailListing.createdAt).toLocaleString()}</span>
+                                  </div>
+                              </div>
+                          </div>
+
+                          {/* Data Form Section */}
+                          <div className="space-y-6">
+                              <div className="space-y-1">
+                                  <label className="text-[10px] font-black uppercase text-gray-400">Listing Title</label>
+                                  <input type="text" className="w-full bg-gray-50 border border-gray-100 p-4 rounded-2xl font-bold text-sm outline-none focus:bg-white transition-all" value={detailListing.title} onChange={e => setDetailListing({...detailListing, title: e.target.value})} />
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-4">
+                                  <div className="space-y-1">
+                                      <label className="text-[10px] font-black uppercase text-gray-400">Asset Price (₹)</label>
+                                      <input type="number" className="w-full bg-gray-50 border border-gray-100 p-4 rounded-2xl font-bold text-sm outline-none focus:bg-white transition-all" value={detailListing.price} onChange={e => setDetailListing({...detailListing, price: Number(e.target.value)})} />
+                                  </div>
+                                  <div className="space-y-1">
+                                      <label className="text-[10px] font-black uppercase text-gray-400">Ad Status</label>
+                                      <select className="w-full bg-gray-50 border border-gray-100 p-4 rounded-2xl font-black uppercase text-[10px] outline-none focus:bg-white transition-all" value={detailListing.status} onChange={e => setDetailListing({...detailListing, status: e.target.value as ListingStatus})}>
+                                          <option value="APPROVED">Live / Approved</option>
+                                          <option value="PENDING">Pending Review</option>
+                                          <option value="EDIT_PENDING">Edit Review</option>
+                                          <option value="REJECTED">Rejected</option>
+                                          <option value="DISABLED">Disabled</option>
+                                      </select>
+                                  </div>
+                              </div>
+
+                              <div className="grid grid-cols-2 gap-4">
+                                  <div className="space-y-1">
+                                      <label className="text-[10px] font-black uppercase text-gray-400">Category Tag</label>
+                                      <select className="w-full bg-gray-50 border border-gray-100 p-4 rounded-2xl font-bold text-xs outline-none focus:bg-white transition-all" value={detailListing.category} onChange={e => setDetailListing({...detailListing, category: e.target.value})}>
+                                          {categories.map(c => <option key={c.id} value={c.name}>{c.name}</option>)}
+                                      </select>
+                                  </div>
+                                  <div className="space-y-1">
+                                      <label className="text-[10px] font-black uppercase text-gray-400">Product Condition</label>
+                                      <select className="w-full bg-gray-50 border border-gray-100 p-4 rounded-2xl font-bold text-xs outline-none focus:bg-white transition-all" value={detailListing.productType || 'Universal'} onChange={e => setDetailListing({...detailListing, productType: e.target.value as any})}>
+                                          <option value="New">New / Fresh</option>
+                                          <option value="Used">Pre-owned / Used</option>
+                                          <option value="Universal">Service / Universal</option>
+                                      </select>
+                                  </div>
+                              </div>
+
+                              <div className="space-y-1">
+                                  <label className="text-[10px] font-black uppercase text-gray-400">Marketplace Location (City)</label>
+                                  <select className="w-full bg-gray-50 border border-gray-100 p-4 rounded-2xl font-bold text-xs outline-none focus:bg-white transition-all" value={detailListing.cityId} onChange={e => setDetailListing({...detailListing, cityId: e.target.value})}>
+                                      {cities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                  </select>
+                              </div>
+
+                              <div className="space-y-1">
+                                  <label className="text-[10px] font-black uppercase text-gray-400">Asset Narrative / Description</label>
+                                  <textarea rows={4} className="w-full bg-gray-50 border border-gray-100 p-4 rounded-2xl font-medium text-sm outline-none focus:bg-white transition-all" value={detailListing.description} onChange={e => setDetailListing({...detailListing, description: e.target.value})} />
+                              </div>
+
+                              <div className="pt-4 flex items-center gap-6 bg-amber-50 p-6 rounded-3xl border border-amber-100">
+                                 <div onClick={() => setDetailListing({...detailListing, isPremium: !detailListing.isPremium})} className={`w-14 h-8 rounded-full flex items-center px-1 cursor-pointer transition-colors ${detailListing.isPremium ? 'bg-amber-400' : 'bg-gray-300'}`}>
+                                     <div className={`w-6 h-6 rounded-full bg-white shadow-sm transform transition-transform ${detailListing.isPremium ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                                 </div>
+                                 <div>
+                                     <p className="text-xs font-black text-gray-900 uppercase">Premium Placement</p>
+                                     <p className="text-[9px] text-amber-700 font-bold uppercase">{detailListing.isPremium ? 'High Visibility Active' : 'Standard Placement'}</p>
+                                 </div>
+                              </div>
+                          </div>
+                      </div>
+                      
+                      <div className="flex justify-end gap-4 pt-8 border-t border-gray-100">
+                          <button onClick={() => handleListingDelete(detailListing.id)} className="bg-rose-50 text-rose-600 px-8 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-rose-600 hover:text-white transition-all">Destroy Asset</button>
+                          <button onClick={handleListingSave} className="bg-slate-900 text-white px-10 py-4 rounded-2xl font-black uppercase text-[10px] tracking-[0.2em] shadow-xl hover:bg-black transition-all">Commit Changes</button>
+                      </div>
+                 </div>
+             </div>
+        </div>
+    );
+  }
+
+  // --- REPLACED MODAL WITH FULL PAGE VIEW ---
+  const renderUserDetailView = () => {
+      if (!detailUser || !selectedUserId) return null;
+      return (
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 pb-20">
+             {/* Header */}
+             <div className="flex items-center gap-6 mb-8">
+                 <button onClick={() => setSelectedUserId(null)} className="w-12 h-12 bg-white rounded-2xl flex items-center justify-center shadow-sm text-gray-400 hover:text-blue-600 transition-colors border border-gray-100"><i className="fas fa-arrow-left"></i></button>
+                 <div>
+                    <h3 className="text-3xl font-black text-gray-900 tracking-tight">User Profile Manager</h3>
+                    <p className="text-xs font-bold text-gray-400 uppercase mt-1 tracking-widest">ID: {detailUser.id}</p>
+                 </div>
+             </div>
+
+             <div className="bg-white rounded-[3rem] shadow-sm border border-gray-100 overflow-hidden">
+                 {/* Top User Info Card */}
+                 <div className="p-10 border-b border-gray-100 flex flex-col md:flex-row items-center gap-8 bg-gray-50/30">
+                     <img src={detailUser.photo} className="w-24 h-24 rounded-[2rem] bg-gray-200 object-cover shadow-lg" />
+                     <div className="flex-1 text-center md:text-left">
+                        <h3 className="text-2xl font-black text-gray-900">{detailUser.name}</h3>
+                        <p className="text-xs text-gray-500 font-bold uppercase mt-1 tracking-widest">{detailUser.email}</p>
+                        <div className="flex gap-2 mt-4 justify-center md:justify-start">
+                            {detailUser.isVerified && <span className="px-3 py-1 bg-blue-100 text-blue-600 rounded-lg text-[9px] font-black uppercase"><i className="fas fa-check-circle mr-1"></i> Verified</span>}
+                            {detailUser.isSuspended && <span className="px-3 py-1 bg-rose-100 text-rose-600 rounded-lg text-[9px] font-black uppercase"><i className="fas fa-ban mr-1"></i> Suspended</span>}
+                            <span className="px-3 py-1 bg-gray-100 text-gray-600 rounded-lg text-[9px] font-black uppercase">Role: {detailUser.role}</span>
+                        </div>
+                     </div>
+                 </div>
+
+                 {/* Tabs */}
+                 <div className="flex border-b border-gray-100 px-10 overflow-x-auto">
+                     {['IDENTITY', 'FINANCIAL', 'INVENTORY', 'RATINGS'].map(tab => (
+                         <button key={tab} onClick={() => setActiveUserDetailTab(tab as any)} className={`px-8 py-5 text-[10px] font-black uppercase tracking-widest border-b-2 transition-all whitespace-nowrap ${activeUserDetailTab === tab ? 'border-blue-600 text-blue-600' : 'border-transparent text-gray-400 hover:text-gray-600'}`}>{tab}</button>
+                     ))}
+                 </div>
+
+                 <div className="p-10 bg-white">
+                     {activeUserDetailTab === 'IDENTITY' && (
+                         <div className="max-w-4xl mx-auto space-y-10">
+                             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                                 {/* Basic Info */}
+                                 <div className="space-y-6">
+                                     <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-500 border-b border-blue-50 pb-2">Basic Information</h4>
+                                     <div className="space-y-4">
+                                         <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Full Name</label><input type="text" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold text-sm" value={detailUser.name} onChange={e => setDetailUser({...detailUser, name: e.target.value})} /></div>
+                                         <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Email Address</label><input type="email" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold text-sm" value={detailUser.email} onChange={e => setDetailUser({...detailUser, email: e.target.value})} /></div>
+                                         <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">System Role</label>
+                                            <select className="w-full bg-gray-50 border p-4 rounded-2xl font-bold text-sm" value={detailUser.role} onChange={e => setDetailUser({...detailUser, role: e.target.value as any})}>
+                                                <option value="USER">User</option><option value="MODERATOR">Moderator</option><option value="ADMIN">Admin</option>
+                                            </select>
+                                         </div>
+                                     </div>
+                                 </div>
+
+                                 {/* Contact & Location */}
+                                 <div className="space-y-6">
+                                     <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-500 border-b border-blue-50 pb-2">Contact & Location</h4>
+                                     <div className="grid grid-cols-2 gap-4">
+                                         <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Mobile</label><input type="text" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold text-sm" value={detailUser.mobile || ''} onChange={e => setDetailUser({...detailUser, mobile: e.target.value})} /></div>
+                                         <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">WhatsApp</label><input type="text" className="w-full bg-gray-50 border p-4 rounded-2xl font-bold text-sm" value={detailUser.whatsapp || ''} onChange={e => setDetailUser({...detailUser, whatsapp: e.target.value})} /></div>
+                                     </div>
+                                     <div className="grid grid-cols-3 gap-4">
+                                         <div className="space-y-1">
+                                            <label className="text-[10px] font-black uppercase text-gray-400">Country</label>
+                                            <select className="w-full bg-gray-50 border p-3 rounded-2xl font-bold text-xs" value={userDetailForm.countryId} onChange={e => handleUserDetailCountryChange(e.target.value)}>
+                                                <option value="">Select</option>{countries.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                            </select>
+                                         </div>
+                                         <div className="space-y-1">
+                                            <label className="text-[10px] font-black uppercase text-gray-400">State</label>
+                                            <select className="w-full bg-gray-50 border p-3 rounded-2xl font-bold text-xs" value={userDetailForm.stateId} onChange={e => handleUserDetailStateChange(e.target.value)}>
+                                                <option value="">Select</option>{detailStates.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                                            </select>
+                                         </div>
+                                         <div className="space-y-1">
+                                            <label className="text-[10px] font-black uppercase text-gray-400">City</label>
+                                            <select className="w-full bg-gray-50 border p-3 rounded-2xl font-bold text-xs" value={userDetailForm.cityId} onChange={e => handleUserDetailCityChange(e.target.value)}>
+                                                <option value="">Select</option>{detailCities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                                            </select>
+                                         </div>
+                                     </div>
+                                     <div className="space-y-1"><label className="text-[10px] font-black uppercase text-gray-400">Address</label><textarea rows={2} className="w-full bg-gray-50 border p-4 rounded-2xl font-bold text-sm" value={detailUser.address || ''} onChange={e => setDetailUser({...detailUser, address: e.target.value})} /></div>
+                                 </div>
+                             </div>
+
+                             {/* Actions & Toggles */}
+                             <div className="pt-8 border-t border-gray-100">
+                                 <h4 className="text-[10px] font-black uppercase tracking-widest text-gray-400 mb-6">Account Actions</h4>
+                                 <div className="flex flex-wrap items-center gap-8">
+                                     
+                                     {/* Verification Toggle */}
+                                     <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100 pr-8">
+                                         <div onClick={() => setDetailUser({...detailUser, isVerified: !detailUser.isVerified})} className={`w-14 h-8 rounded-full flex items-center px-1 cursor-pointer transition-colors ${detailUser.isVerified ? 'bg-blue-600' : 'bg-gray-300'}`}>
+                                             <div className={`w-6 h-6 rounded-full bg-white shadow-sm transform transition-transform ${detailUser.isVerified ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                                         </div>
+                                         <div>
+                                             <p className="text-xs font-black text-gray-900">Verification Status</p>
+                                             <p className="text-[9px] text-gray-400 uppercase font-bold">{detailUser.isVerified ? 'Verified Account' : 'Unverified'}</p>
+                                         </div>
+                                     </div>
+
+                                     {/* Suspension Toggle */}
+                                     <div className="flex items-center gap-4 bg-gray-50 p-4 rounded-2xl border border-gray-100 pr-8">
+                                         <div onClick={() => setDetailUser({...detailUser, isSuspended: !detailUser.isSuspended})} className={`w-14 h-8 rounded-full flex items-center px-1 cursor-pointer transition-colors ${detailUser.isSuspended ? 'bg-rose-600' : 'bg-gray-300'}`}>
+                                             <div className={`w-6 h-6 rounded-full bg-white shadow-sm transform transition-transform ${detailUser.isSuspended ? 'translate-x-6' : 'translate-x-0'}`}></div>
+                                         </div>
+                                         <div>
+                                             <p className="text-xs font-black text-gray-900">Account Suspension</p>
+                                             <p className="text-[9px] text-gray-400 uppercase font-bold">{detailUser.isSuspended ? 'Account Suspended' : 'Active Account'}</p>
+                                         </div>
+                                     </div>
+
+                                     <div className="flex-1 text-right">
+                                         <button onClick={saveDetailProfile} disabled={isProcessing} className="bg-slate-900 text-white px-10 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-black transition-all shadow-xl">Save Changes</button>
+                                     </div>
+                                 </div>
+                                 <p className="text-[9px] text-gray-400 mt-4 italic">* Suspending an account will automatically disable all active listings. Reactivating will restore them.</p>
+                             </div>
+                         </div>
+                     )}
+                     {activeUserDetailTab === 'FINANCIAL' && (
+                         <div className="space-y-8 max-w-4xl mx-auto">
+                             <div className="bg-white p-8 rounded-[2.5rem] border border-gray-100 shadow-sm flex justify-between items-center">
+                                 <div><p className="text-[10px] font-black uppercase text-gray-400">Wallet Balance</p><p className="text-4xl font-black text-gray-900 mt-1">₹{detailUser.walletBalance.toLocaleString()}</p></div>
+                                 <div className="space-y-2">
+                                     <div className="flex gap-2">
+                                         <input type="number" placeholder="Amount" className="w-32 bg-gray-50 border p-3 rounded-xl text-sm font-bold" value={walletForm.amount} onChange={e => setWalletForm({...walletForm, amount: e.target.value})} />
+                                         <select className="bg-gray-50 border p-3 rounded-xl text-sm font-bold" value={walletForm.type} onChange={e => setWalletForm({...walletForm, type: e.target.value as any})}><option value="CREDIT">Credit</option><option value="DEBIT">Debit</option></select>
+                                     </div>
+                                     <input type="text" placeholder="Reason" className="w-full bg-gray-50 border p-3 rounded-xl text-xs" value={walletForm.reason} onChange={e => setWalletForm({...walletForm, reason: e.target.value})} />
+                                     <button onClick={handleWalletAdjustment} className="w-full bg-slate-900 text-white py-3 rounded-xl text-[10px] font-black uppercase">Execute Adjustment</button>
+                                 </div>
+                             </div>
+                             <h4 className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Transaction History</h4>
+                             <table className="w-full text-left bg-gray-50 rounded-[2rem] overflow-hidden border border-gray-100">
+                                 <tbody className="divide-y divide-gray-200">
+                                     {detailTxns.map(tx => (
+                                         <tr key={tx.id} className="text-xs hover:bg-white transition-colors">
+                                             <td className="p-6 text-gray-500 font-bold">{new Date(tx.timestamp).toLocaleDateString()}</td>
+                                             <td className="p-6 font-bold text-gray-900">{tx.description}</td>
+                                             <td className={`p-6 font-mono font-black text-right ${tx.type === 'CREDIT' ? 'text-emerald-600' : 'text-rose-600'}`}>{tx.type === 'CREDIT' ? '+' : '-'} {tx.amount}</td>
+                                         </tr>
+                                     ))}
+                                 </tbody>
+                             </table>
+                         </div>
+                     )}
+                     {activeUserDetailTab === 'INVENTORY' && (
+                         <div className="grid grid-cols-2 md:grid-cols-3 gap-6">
+                             {detailAds.map(ad => (
+                                 <div key={ad.id} onClick={() => setSelectedListingId(ad.id)} className="bg-white p-4 rounded-[2rem] border border-gray-100 flex gap-4 cursor-pointer hover:shadow-xl transition-all group">
+                                     <img src={ad.images[0]} className="w-20 h-20 rounded-2xl object-cover bg-gray-100" />
+                                     <div className="flex flex-col justify-center">
+                                         <h5 className="font-black text-gray-900 text-sm line-clamp-1 group-hover:text-blue-600 transition-colors">{ad.title}</h5>
+                                         <p className="text-xs text-gray-500 font-bold mt-1">₹{ad.price.toLocaleString()}</p>
+                                         <span className={`text-[8px] font-black uppercase mt-2 px-2 py-0.5 rounded w-fit ${ad.status === 'APPROVED' ? 'bg-emerald-50 text-emerald-600' : 'bg-gray-100 text-gray-500'}`}>{ad.status}</span>
+                                     </div>
+                                 </div>
+                             ))}
+                         </div>
+                     )}
+                     {activeUserDetailTab === 'RATINGS' && (
+                         <div className="space-y-4 max-w-3xl mx-auto">
+                             {detailRatings.map(r => (
+                                 <div key={r.id} className="bg-white p-8 rounded-[2.5rem] border border-gray-100 relative group hover:shadow-md transition-all">
+                                     <div className="flex justify-between mb-2">
+                                         <span className="font-black text-xs text-gray-900 uppercase">{r.fromUserName}</span>
+                                         <div className="text-yellow-400 text-xs">{'★'.repeat(Math.round(r.score))}</div>
+                                     </div>
+                                     <p className="text-sm text-gray-600 italic leading-relaxed">"{r.comment}"</p>
+                                     <div className="absolute top-6 right-6 opacity-0 group-hover:opacity-100 transition-opacity flex gap-2">
+                                         <button onClick={() => handleRatingEdit(r.id)} className="text-blue-500 hover:text-blue-700 bg-blue-50 w-8 h-8 rounded-full flex items-center justify-center"><i className="fas fa-pen text-xs"></i></button>
+                                         <button onClick={() => handleRatingDelete(r.id)} className="text-rose-500 hover:text-rose-700 bg-rose-50 w-8 h-8 rounded-full flex items-center justify-center"><i className="fas fa-trash text-xs"></i></button>
+                                     </div>
+                                 </div>
+                             ))}
+                             {detailRatings.length === 0 && <p className="text-center text-gray-400 text-xs font-bold uppercase tracking-widest py-10">No ratings available.</p>}
+                         </div>
+                     )}
+                 </div>
+             </div>
+        </div>
+      );
+  }
 
   return (
     <div className="min-h-screen bg-gray-50 flex font-sans">
@@ -1943,7 +1414,7 @@ export const AdminPanel: React.FC<{
              { id: 'REVENUE', label: 'Revenue Engine', icon: 'fa-money-bill-trend-up' },
              { id: 'SYSTEM', label: 'System Logic', icon: 'fa-microchip' }
            ].map(item => (
-             <button key={item.id} onClick={() => setActiveMenu(item.id as MainMenu)} className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeMenu === item.id ? 'bg-blue-600 text-white shadow-2xl shadow-blue-500/20 translate-x-2' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
+             <button key={item.id} onClick={() => { setActiveMenu(item.id as MainMenu); setSelectedUserId(null); }} className={`w-full flex items-center gap-4 px-5 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeMenu === item.id ? 'bg-blue-600 text-white shadow-2xl shadow-blue-500/20 translate-x-2' : 'text-slate-400 hover:bg-slate-800 hover:text-white'}`}>
                 <i className={`fas ${item.icon} text-sm w-5`}></i> {item.label}
              </button>
            ))}
@@ -1975,27 +1446,35 @@ export const AdminPanel: React.FC<{
         </header>
 
         <div className="p-10">
-           <div className="flex items-center space-x-2 mb-10 bg-white p-1.5 rounded-[2.5rem] border border-gray-100 shadow-sm w-fit">
-              {getTabsForMenu(activeMenu).map(tab => (
-                 <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-100' : 'text-gray-400 hover:bg-gray-50'}`}>{tab.label}</button>
-              ))}
-           </div>
+           {/* If selectedUserId is set, show the Detail Page View, otherwise show the standard dashboard content */}
+           {selectedUserId ? (
+               renderUserDetailView()
+           ) : (
+               <>
+                   <div className="flex items-center space-x-2 mb-10 bg-white p-1.5 rounded-[2.5rem] border border-gray-100 shadow-sm w-fit">
+                      {getTabsForMenu(activeMenu).map(tab => (
+                         <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-100' : 'text-gray-400 hover:bg-gray-50'}`}>{tab.label}</button>
+                      ))}
+                   </div>
 
-           <div className="relative">
-              {loading && (
-                <div className="absolute inset-0 bg-gray-50/50 backdrop-blur-sm z-10 flex items-center justify-center py-20"><i className="fas fa-circle-notch fa-spin text-4xl text-blue-500"></i></div>
-              )}
-              {activeMenu === 'DASHBOARD' && renderDashboard()}
-              {activeMenu === 'REVENUE' && renderRevenue()}
-              {activeMenu === 'GEO_CATS' && renderGeoCats()}
-              {activeMenu === 'USERS' && renderUsersModule()}
-              {activeMenu === 'LISTINGS' && renderListings()}
-              {activeMenu === 'SYSTEM' && renderSystem()}
-           </div>
+                   <div className="relative">
+                      {loading && (
+                        <div className="absolute inset-0 bg-gray-50/50 backdrop-blur-sm z-10 flex items-center justify-center py-20"><i className="fas fa-circle-notch fa-spin text-4xl text-blue-500"></i></div>
+                      )}
+                      {activeMenu === 'DASHBOARD' && renderDashboard()}
+                      {activeMenu === 'REVENUE' && renderRevenue()}
+                      {activeMenu === 'GEO_CATS' && renderGeoCats()}
+                      {activeMenu === 'USERS' && renderUsersModule()}
+                      {activeMenu === 'LISTINGS' && renderListings()}
+                      {activeMenu === 'SYSTEM' && renderSystem()}
+                   </div>
+               </>
+           )}
         </div>
       </main>
 
       {renderListingDetailModal()}
+      {/* NOTE: renderUserDetailModal is removed as we switched to full page view 'renderUserDetailView' */}
     </div>
   );
 };
