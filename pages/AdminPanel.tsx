@@ -1169,6 +1169,172 @@ export const AdminPanel: React.FC<{
             </div>
         )
     }
+    if (activeTab === 'adsense') {
+      return (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4">
+          <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-8">
+            <div className="flex justify-between items-center border-b border-gray-50 pb-6">
+              <div>
+                <h4 className="text-[10px] font-black uppercase tracking-widest text-blue-500">Google AdSense Module</h4>
+                <p className="text-[9px] font-bold text-gray-400 mt-1 uppercase">Inject third-party programmatic revenue streams</p>
+              </div>
+              <div className="w-12 h-12 bg-gray-50 rounded-2xl flex items-center justify-center text-gray-300">
+                <i className="fab fa-google text-xl"></i>
+              </div>
+            </div>
+            
+            <div className="space-y-6">
+               <div className="space-y-2">
+                  <div className="flex justify-between items-center px-1">
+                    <label className="text-[10px] font-black uppercase text-gray-400">Master Script Integration</label>
+                    <span className="text-[8px] font-bold text-blue-500 bg-blue-50 px-2 py-0.5 rounded">Auto-Injection Enabled</span>
+                  </div>
+                  <textarea 
+                    rows={12} 
+                    className="w-full bg-gray-50 border border-gray-200 p-6 rounded-[2rem] font-mono text-xs focus:bg-white focus:border-blue-200 transition-all outline-none shadow-inner" 
+                    value={config.googleAdsenseCode} 
+                    onChange={e => setConfig({...config, googleAdsenseCode: e.target.value})}
+                    placeholder="Paste your Google AdSense <script> or Auto-ads code here..."
+                  />
+               </div>
+
+               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                  <div className="bg-blue-50/50 p-6 rounded-3xl border border-blue-100/50 flex gap-4">
+                     <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-blue-500 shadow-sm flex-shrink-0">
+                        <i className="fas fa-shield-check"></i>
+                     </div>
+                     <div>
+                        <p className="text-[10px] font-black text-blue-900 uppercase">Security Check</p>
+                        <p className="text-[9px] text-blue-700/70 mt-1 leading-relaxed">The platform sanitizes the input for high-level XSS protection while maintaining script integrity.</p>
+                     </div>
+                  </div>
+                  <div className="bg-emerald-50/50 p-6 rounded-3xl border border-emerald-100/50 flex gap-4">
+                     <div className="w-10 h-10 bg-white rounded-xl flex items-center justify-center text-emerald-500 shadow-sm flex-shrink-0">
+                        <i className="fas fa-bolt"></i>
+                     </div>
+                     <div>
+                        <p className="text-[10px] font-black text-emerald-900 uppercase">Performance Node</p>
+                        <p className="text-[9px] text-emerald-700/70 mt-1 leading-relaxed">Ads are loaded asynchronously to prevent impact on marketplace Core Web Vitals.</p>
+                     </div>
+                  </div>
+               </div>
+            </div>
+            
+            <button 
+              onClick={handleConfigCommit} 
+              disabled={isProcessing}
+              className="w-full bg-slate-900 text-white py-5 rounded-[2rem] font-black uppercase text-[10px] tracking-[0.2em] shadow-2xl shadow-slate-200 hover:bg-black transition-all flex items-center justify-center gap-3 active:scale-[0.98]"
+            >
+              {isProcessing ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-save"></i>} Commit AdSense Protocols
+            </button>
+          </div>
+        </div>
+      );
+    }
+    if (activeTab === 'gateways') {
+      const gateways = [
+        { id: 'razorpay', label: 'Razorpay', icon: 'fa-indian-rupee-sign', region: 'India', fields: [
+          { key: 'keyId', label: 'Key ID' },
+          { key: 'keySecret', label: 'Key Secret' }
+        ]},
+        { id: 'paytm', label: 'Paytm', icon: 'fa-wallet', region: 'India', fields: [
+          { key: 'merchantId', label: 'Merchant ID' },
+          { key: 'merchantKey', label: 'Merchant Key' },
+          { key: 'website', label: 'Website URL' }
+        ]},
+        { id: 'phonepe', label: 'PhonePe', icon: 'fa-mobile-screen', region: 'India', fields: [
+          { key: 'merchantId', label: 'Merchant ID' },
+          { key: 'saltKey', label: 'Salt Key' },
+          { key: 'saltIndex', label: 'Salt Index' }
+        ]},
+        { id: 'stripe', label: 'Stripe', icon: 'fa-brands fa-stripe', region: 'International', fields: [
+          { key: 'publishableKey', label: 'Publishable Key' },
+          { key: 'secretKey', label: 'Secret Key' }
+        ]},
+        { id: 'paypal', label: 'PayPal', icon: 'fa-brands fa-paypal', region: 'International', fields: [
+          { key: 'clientId', label: 'Client ID' },
+          { key: 'secret', label: 'Secret Key' }
+        ]}
+      ];
+
+      return (
+        <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 pb-20">
+          <div className="grid grid-cols-1 gap-8">
+            {gateways.map(gw => (
+              <div key={gw.id} className="bg-white p-8 md:p-10 rounded-[3rem] border border-gray-100 shadow-sm transition-all hover:shadow-md">
+                <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-10 border-b border-gray-50 pb-8">
+                   <div className="flex items-center gap-6">
+                      <div className={`w-16 h-16 rounded-[2rem] flex items-center justify-center text-2xl shadow-xl shadow-blue-50 ${config.paymentGateway[gw.id as keyof SystemConfig['paymentGateway']]?.active ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-400'}`}>
+                         <i className={`fas ${gw.icon}`}></i>
+                      </div>
+                      <div>
+                         <h4 className="text-xl font-black uppercase tracking-tight text-gray-900">{gw.label}</h4>
+                         <span className={`text-[9px] font-black uppercase tracking-widest px-2 py-0.5 rounded-md ${gw.region === 'India' ? 'bg-emerald-50 text-emerald-600' : 'bg-amber-50 text-amber-600'}`}>
+                            {gw.region} Node
+                         </span>
+                      </div>
+                   </div>
+                   <div className="flex items-center gap-4 bg-gray-50 p-2 rounded-2xl border border-gray-100">
+                      <span className={`text-[10px] font-black uppercase tracking-widest mr-2 ${config.paymentGateway[gw.id as keyof SystemConfig['paymentGateway']]?.active ? 'text-blue-600' : 'text-gray-400'}`}>
+                         {config.paymentGateway[gw.id as keyof SystemConfig['paymentGateway']]?.active ? 'Operational' : 'Offline'}
+                      </span>
+                      <button 
+                        onClick={() => setConfig({
+                          ...config, 
+                          paymentGateway: {
+                            ...config.paymentGateway, 
+                            [gw.id]: { ...config.paymentGateway[gw.id as keyof SystemConfig['paymentGateway']], active: !config.paymentGateway[gw.id as keyof SystemConfig['paymentGateway']]?.active }
+                          }
+                        })}
+                        className={`w-16 h-8 rounded-full relative transition-all duration-300 ${config.paymentGateway[gw.id as keyof SystemConfig['paymentGateway']]?.active ? 'bg-blue-600' : 'bg-gray-300'}`}
+                      >
+                         <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all duration-300 shadow-sm ${config.paymentGateway[gw.id as keyof SystemConfig['paymentGateway']]?.active ? 'left-9' : 'left-1'}`}></div>
+                      </button>
+                   </div>
+                </div>
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                   {gw.fields.map(f => (
+                     <div key={f.key} className="space-y-1">
+                        <label className="text-[10px] font-black uppercase text-gray-400 ml-1">{f.label}</label>
+                        <input 
+                          type="password"
+                          className="w-full bg-gray-50 border border-gray-200 p-4 rounded-2xl font-bold text-sm outline-none focus:bg-white focus:border-blue-200 transition-all"
+                          value={(config.paymentGateway[gw.id as keyof SystemConfig['paymentGateway']] as any)?.[f.key] || ''}
+                          onChange={e => {
+                            const updatedGateway = { ...(config.paymentGateway[gw.id as keyof SystemConfig['paymentGateway']] as any), [f.key]: e.target.value };
+                            setConfig({
+                              ...config,
+                              paymentGateway: { ...config.paymentGateway, [gw.id]: updatedGateway }
+                            });
+                          }}
+                          placeholder={`Enter encrypted ${f.label.toLowerCase()}`}
+                        />
+                     </div>
+                   ))}
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="bg-slate-900 p-10 rounded-[3rem] shadow-2xl flex flex-col md:flex-row items-center justify-between gap-8 relative overflow-hidden">
+             <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500 rounded-full blur-[120px] opacity-10"></div>
+             <div>
+                <h4 className="text-xl font-black text-white uppercase tracking-tight">Deploy Gateway Logic</h4>
+                <p className="text-[10px] font-bold text-slate-400 uppercase tracking-[0.2em] mt-2">Updating protocols will immediately affect all city-locked settlement nodes</p>
+             </div>
+             <button 
+                onClick={handleConfigCommit}
+                disabled={isProcessing}
+                className="w-full md:w-auto bg-blue-600 text-white px-12 py-5 rounded-[2rem] font-black uppercase text-[10px] tracking-[0.2em] shadow-xl shadow-blue-500/20 hover:bg-blue-500 transition-all active:scale-[0.98]"
+             >
+                {isProcessing ? <i className="fas fa-circle-notch fa-spin mr-2"></i> : <i className="fas fa-rocket mr-2"></i>}
+                Push Protocol Updates
+             </button>
+          </div>
+        </div>
+      );
+    }
     return null;
   };
 
