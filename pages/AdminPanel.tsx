@@ -12,6 +12,8 @@ type MainMenu =
 
 type UserDetailTab = 'IDENTITY' | 'FINANCIAL' | 'INVENTORY' | 'RATINGS';
 
+type RevenueFilter = '7d' | '1m' | '3m' | '6m' | '12m';
+
 const notify = (message: string, type: 'success' | 'error' | 'info' = 'success') => {
   window.dispatchEvent(new CustomEvent('adoiz-notify', { detail: { message, type } }));
 };
@@ -31,12 +33,18 @@ export const AdminPanel: React.FC<{
   const [isProcessing, setIsProcessing] = useState(false);
   const [config, setConfig] = useState<SystemConfig>(dbService.getSystemConfig());
   
+  // Date filter for revenue
+  const [revenueFilter, setRevenueFilter] = useState<RevenueFilter>('7d');
+
   // Data States
   const [users, setUsers] = useState<User[]>([]);
   const [listings, setListings] = useState<Listing[]>([]);
   const [banners, setBanners] = useState<BannerAd[]>([]);
   const [logs, setLogs] = useState<SecurityLog[]>([]);
   const [allTransactions, setAllTransactions] = useState<WalletTransaction[]>([]);
+
+  // Broadcasting State
+  const [broadcastMsg, setBroadcastMsg] = useState('');
 
   // Geo & Cats Data
   const [countries, setCountries] = useState<Country[]>([]);
@@ -320,9 +328,63 @@ export const AdminPanel: React.FC<{
     setConfig({ ...config, branding: { ...config.branding, resourceLinks: updated } });
   };
 
+  const handleSendBroadcast = async () => {
+    const cleanMsg = broadcastMsg.trim();
+    if (!cleanMsg) {
+      notify("Please enter a message to broadcast.", "error");
+      return;
+    }
+
+    // Refresh users from source to ensure complete delivery
+    const latestUsers = await dbService.getAllUsers();
+    if (!window.confirm(`This will send a private chat message to all ${latestUsers.length} platform members. Continue?`)) return;
+
+    setIsProcessing(true);
+    try {
+      // Mock listing for the system announcement
+      const systemListing: any = {
+        id: 'system_broadcast_notice',
+        title: 'Platform Announcement',
+        sellerId: user.id,
+        price: 0,
+        category: 'Information',
+        images: ['https://picsum.photos/seed/info/200'],
+        status: ListingStatus.APPROVED,
+        cityId: 'global'
+      };
+
+      let sentCount = 0;
+      for (const targetUser of latestUsers) {
+        // Skip sender
+        if (targetUser.id === user.id) continue;
+        
+        try {
+          // Sequential execution to maintain storage integrity in mock environment
+          const chat = await dbService.getOrCreateChat(targetUser.id, user.id, systemListing, user.name);
+          await dbService.sendMessage(chat.id, user.id, cleanMsg);
+          sentCount++;
+        } catch (innerErr) {
+          console.error(`Failed to send broadcast to user ${targetUser.id}:`, innerErr);
+        }
+      }
+
+      notify(`Broadcast sent to ${sentCount} users successfully.`, "success");
+      setBroadcastMsg('');
+    } catch (err: any) {
+      console.error("Critical Broadcast Failure:", err);
+      notify("Broadcast failed: " + err.message, "error");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
   function getTabsForMenu(menu: MainMenu) {
     switch(menu) {
-      case 'DASHBOARD': return [{ id: 'platform_meta', label: 'Platform Overview' }];
+      case 'DASHBOARD': return [
+        { id: 'platform_meta', label: 'Platform Overview' },
+        { id: 'revanue', label: 'Revanue' },
+        { id: 'broadcast', label: 'Broadcasting' }
+      ];
       case 'USERS': return [{ id: 'all_users', label: 'User List' }];
       case 'LISTINGS': return [{ id: 'inventory', label: 'All Ads' }];
       case 'GEO_CATS': return [
@@ -365,6 +427,154 @@ export const AdminPanel: React.FC<{
   }, [states, geoFilterCountry]);
 
   const renderDashboard = () => {
+    if (activeTab === 'broadcast') {
+      return (
+        <div className="max-w-4xl space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-8">
+            <div className="flex items-center gap-6 mb-2">
+              <div className="w-16 h-16 bg-blue-600 text-white rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-blue-200">
+                <i className="fas fa-bullhorn"></i>
+              </div>
+              <div>
+                <h3 className="text-xl font-black uppercase text-gray-900 tracking-tight">Admin Broadcasting</h3>
+                <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Send a chat notification to every platform member</p>
+              </div>
+            </div>
+
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Announcement Message</label>
+                <textarea 
+                  className="w-full bg-gray-50 border border-gray-100 p-6 rounded-[2.5rem] font-medium text-sm h-64 outline-none focus:ring-4 focus:ring-blue-500/5 focus:bg-white focus:border-blue-500 transition-all leading-relaxed"
+                  placeholder="Type your broadcast message here... All users will receive this in their private inbox."
+                  value={broadcastMsg}
+                  onChange={e => setBroadcastMsg(e.target.value)}
+                />
+              </div>
+            </div>
+
+            <div className="p-6 bg-amber-50 rounded-2xl border border-amber-100 flex gap-4 items-center">
+              <i className="fas fa-circle-exclamation text-amber-500"></i>
+              <p className="text-[10px] font-bold text-amber-700 uppercase tracking-widest leading-relaxed">
+                Warning: This action cannot be undone. Once sent, the message will appear in the private chats of all registered users.
+              </p>
+            </div>
+
+            <div className="pt-4 border-t border-gray-50">
+              <button 
+                onClick={handleSendBroadcast} 
+                disabled={isProcessing || !broadcastMsg.trim()} 
+                className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl hover:bg-black transition-all flex items-center justify-center gap-3 disabled:opacity-50"
+              >
+                {isProcessing ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-paper-plane"></i>}
+                Dispatch Broadcast Now
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (activeTab === 'revanue') {
+      // Filtering logic for revenue based on selected dropdown period
+      const filteredTxns = allTransactions.filter(t => {
+         if (t.type !== 'DEBIT') return false;
+         
+         const txDate = new Date(t.timestamp).getTime();
+         const now = Date.now();
+         let threshold = 0;
+         
+         switch(revenueFilter) {
+            case '7d': threshold = now - (7 * 24 * 60 * 60 * 1000); break;
+            case '1m': threshold = now - (30 * 24 * 60 * 60 * 1000); break;
+            case '3m': threshold = now - (90 * 24 * 60 * 60 * 1000); break;
+            case '6m': threshold = now - (180 * 24 * 60 * 60 * 1000); break;
+            case '12m': threshold = now - (365 * 24 * 60 * 60 * 1000); break;
+         }
+         
+         return txDate >= threshold;
+      });
+
+      const totalRevenue = filteredTxns.reduce((acc, t) => acc + t.amount, 0);
+      const revenueByDescription = filteredTxns
+        .reduce((acc: Record<string, number>, t) => {
+          acc[t.description] = (acc[t.description] || 0) + t.amount;
+          return acc;
+        }, {});
+
+      return (
+        <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+           <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
+              <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 mb-12">
+                 <div className="flex items-center gap-6">
+                    <div className="w-16 h-16 bg-indigo-500 text-white rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-indigo-200">
+                       <i className="fas fa-money-bill-trend-up"></i>
+                    </div>
+                    <div>
+                       <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest">Calculated Platform Earnings</p>
+                       <h3 className="text-4xl font-black text-gray-900">₹{totalRevenue.toLocaleString()}</h3>
+                    </div>
+                 </div>
+
+                 {/* Dropdown Filter */}
+                 <div className="relative w-full md:w-64">
+                    <label className="text-[9px] font-black uppercase text-gray-400 ml-1 mb-2 block tracking-widest">Select Period</label>
+                    <div className="relative">
+                       <select 
+                         value={revenueFilter} 
+                         onChange={(e) => setRevenueFilter(e.target.value as RevenueFilter)}
+                         className="w-full bg-gray-50 border border-gray-100 p-4 rounded-2xl text-xs font-black uppercase outline-none focus:ring-4 focus:ring-indigo-500/5 appearance-none cursor-pointer"
+                       >
+                          <option value="7d">Last 7 Days</option>
+                          <option value="1m">Last 1 Month</option>
+                          <option value="3m">Last 3 Months</option>
+                          <option value="6m">Last 6 Months</option>
+                          <option value="12m">Last 12 Months</option>
+                       </select>
+                       <i className="fas fa-chevron-down absolute right-4 top-1/2 -translate-y-1/2 text-gray-300 pointer-events-none"></i>
+                    </div>
+                 </div>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-12">
+                 <div className="space-y-6">
+                    <h4 className="text-sm font-black uppercase text-gray-900 tracking-tight">Earning Breakdown</h4>
+                    <div className="space-y-4">
+                       {Object.entries(revenueByDescription).map(([desc, amt]) => (
+                          <div key={desc} className="flex justify-between items-center p-5 bg-gray-50 rounded-2xl border border-gray-100">
+                             <span className="text-xs font-bold text-gray-600 uppercase">{desc}</span>
+                             <span className="text-sm font-black text-gray-900">₹{amt.toLocaleString()}</span>
+                          </div>
+                       ))}
+                       {Object.keys(revenueByDescription).length === 0 && (
+                          <p className="text-xs font-bold text-gray-400 italic">No revenue data for this period.</p>
+                       )}
+                    </div>
+                 </div>
+
+                 <div className="space-y-6">
+                    <h4 className="text-sm font-black uppercase text-gray-900 tracking-tight">Period Billing Transactions</h4>
+                    <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
+                       {filteredTxns.slice(0, 15).map(t => (
+                          <div key={t.id} className="flex justify-between items-center p-4 hover:bg-gray-50 rounded-xl transition-all border-b border-gray-50">
+                             <div className="min-w-0 flex-1 mr-4">
+                                <p className="text-[10px] font-black text-gray-900 uppercase truncate">{t.description}</p>
+                                <p className="text-[8px] font-bold text-gray-400 uppercase tracking-tighter">{new Date(t.timestamp).toLocaleDateString()}</p>
+                             </div>
+                             <span className="text-xs font-black text-emerald-600 whitespace-nowrap">+₹{t.amount}</span>
+                          </div>
+                       ))}
+                       {filteredTxns.length === 0 && (
+                         <p className="text-xs font-bold text-gray-400 italic">No transactions found in this date range.</p>
+                       )}
+                    </div>
+                 </div>
+              </div>
+           </div>
+        </div>
+      );
+    }
+
     const stats = [
       { label: 'Total Users', value: users.length, icon: 'fa-users', color: 'bg-blue-500' },
       { label: 'Live Ads', value: listings.filter(l => l.status === ListingStatus.APPROVED).length, icon: 'fa-box', color: 'bg-emerald-500' },
@@ -955,7 +1165,7 @@ export const AdminPanel: React.FC<{
                         <input type="number" required className="w-full bg-gray-50 border p-5 rounded-2xl font-bold" value={walletForm.amount} onChange={e => setWalletForm({...walletForm, amount: e.target.value})} placeholder="0.00" />
                      </div>
                      <div className="space-y-2">
-                        <label className="text-[9px] font-black uppercase text-gray-400 ml-1">Reason</label>
+                        <label className="text-[9px) font-black uppercase text-gray-400 ml-1">Reason</label>
                         <input type="text" required className="w-full bg-gray-50 border p-5 rounded-2xl font-bold" value={walletForm.reason} onChange={e => setWalletForm({...walletForm, reason: e.target.value})} placeholder="e.g. Refund, Correction" />
                      </div>
                      <button type="submit" disabled={isProcessing} className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl hover:bg-black transition-all">Update Balance</button>
@@ -1014,7 +1224,7 @@ export const AdminPanel: React.FC<{
                 <div className="grid grid-cols-2 gap-8">
                    <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400 ml-1">Premium Ad Price (₹)</label><input type="number" className="w-full bg-gray-50 border p-5 rounded-2xl font-bold" value={config.premiumPrice} onChange={e => setConfig({...config, premiumPrice: Number(e.target.value)})} /></div>
                    <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400 ml-1">Free Ad Limit</label><input type="number" className="w-full bg-gray-50 border p-5 rounded-2xl font-bold" value={config.freeAdLimit} onChange={e => setConfig({...config, freeAdLimit: Number(e.target.value)})} /></div>
-                   <div className="space-y-2"><label className="text-[10px) font-black uppercase text-gray-400 ml-1">Blue Tick Verification (₹)</label><input type="number" className="w-full bg-gray-50 border p-5 rounded-2xl font-bold" value={config.blueTickPrice} onChange={e => setConfig({...config, blueTickPrice: Number(e.target.value)})} /></div>
+                   <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400 ml-1">Blue Tick Verification (₹)</label><input type="number" className="w-full bg-gray-50 border p-5 rounded-2xl font-bold" value={config.blueTickPrice} onChange={e => setConfig({...config, blueTickPrice: Number(e.target.value)})} /></div>
                 </div>
                 <div className="pt-6"><button onClick={handleConfigCommit} disabled={isProcessing} className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-black transition-all">Save Changes</button></div>
              </div>
