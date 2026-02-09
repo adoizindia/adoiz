@@ -27,7 +27,6 @@ export const ListingFeed: React.FC<ListingFeedProps> = ({
   const [listings, setListings] = useState<Listing[]>([]);
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [sortBy, setSortBy] = useState<SortOption>('newest');
 
   useEffect(() => {
@@ -62,28 +61,8 @@ export const ListingFeed: React.FC<ListingFeedProps> = ({
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 pb-24">
       <div className="flex flex-col gap-6 mb-8 bg-white p-5 md:p-8 rounded-[2.5rem] border border-gray-100 shadow-sm animate-in slide-in-from-top-4">
-        <div className="flex flex-row items-center justify-between gap-2 md:gap-4 w-full">
-          <div className="flex items-center space-x-1 md:space-x-2 bg-gray-50 p-1 md:p-1.5 rounded-xl md:rounded-2xl border border-gray-100 flex-shrink-0">
-            <button onClick={() => setViewMode('grid')} className={`px-2 md:px-5 py-2 md:py-2.5 rounded-lg md:rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'grid' ? 'bg-white text-[#1a73e8] shadow-sm border border-gray-100' : 'text-gray-400'}`}>
-              <i className="fas fa-grip-vertical mr-1 md:mr-2"></i> Grid
-            </button>
-            <button onClick={() => setViewMode('list')} className={`px-2 md:px-5 py-2 md:py-2.5 rounded-lg md:rounded-xl text-[8px] md:text-[10px] font-black uppercase tracking-widest transition-all ${viewMode === 'list' ? 'bg-white text-[#1a73e8] shadow-sm border border-gray-100' : 'text-gray-400'}`}>
-              <i className="fas fa-list mr-1 md:mr-2"></i> List
-            </button>
-          </div>
-
-          <div className="relative flex-1 md:w-auto min-w-0">
-            <i className="fas fa-sort-amount-down absolute left-3 md:left-4 top-1/2 -translate-y-1/2 text-gray-400 text-[10px]"></i>
-            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortOption)} className="w-full md:w-auto bg-white border border-gray-100 pl-8 md:pl-10 pr-6 md:pr-10 py-2 md:py-3 rounded-xl md:rounded-2xl text-[8px] md:text-[10px] font-black uppercase tracking-widest outline-none focus:ring-2 focus:ring-blue-500/10 appearance-none cursor-pointer truncate">
-              <option value="newest">Newest First</option>
-              <option value="oldest">Oldest First</option>
-              <option value="price_low">Price: Low to High</option>
-              <option value="price_high">Price: High to Low</option>
-            </select>
-            <i className="fas fa-chevron-down absolute right-3 md:right-4 top-1/2 -translate-y-1/2 text-gray-300 text-[8px] pointer-events-none"></i>
-          </div>
-        </div>
-
+        {/* Sort and Title Row Removed as requested */}
+        
         <div className="flex items-center space-x-2 overflow-x-auto hide-scrollbar pb-1">
           <button onClick={() => onCategoryChange('All')} className={`flex-shrink-0 px-6 py-3 rounded-full text-[11px] font-bold uppercase tracking-widest transition-all border ${category === 'All' ? 'bg-[#1a73e8] text-white border-[#1a73e8] shadow-lg shadow-blue-100' : 'bg-white text-gray-500 border-gray-100 hover:border-gray-300'}`}>
             All Items
@@ -120,14 +99,14 @@ export const ListingFeed: React.FC<ListingFeedProps> = ({
           <button onClick={() => { handleClearSearch(); onCategoryChange('All'); }} className="mt-8 bg-blue-600 text-white px-8 py-3 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-blue-100">Reset All Filters</button>
         </div>
       ) : (
-        <div className={viewMode === 'grid' ? "grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-8" : "space-y-4"}>
+        <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 md:gap-8">
           {sortedListings.map(l => (
             <div 
               key={l.id} 
               onClick={() => onListingClick(l)}
-              className={`group bg-white rounded-[2rem] overflow-hidden shadow-sm hover:shadow-2xl border transition-all duration-500 cursor-pointer flex ${viewMode === 'grid' ? 'flex-col' : 'flex-row h-48 md:h-56'} ${l.isPremium ? 'border-yellow-200 ring-1 ring-yellow-100/50' : 'border-gray-100'}`}
+              className={`group bg-white rounded-[2rem] overflow-hidden shadow-sm hover:shadow-2xl border transition-all duration-500 cursor-pointer flex flex-col ${l.isPremium ? 'border-yellow-200 ring-1 ring-yellow-100/50' : 'border-gray-100'}`}
             >
-              <div className={`relative overflow-hidden ${viewMode === 'grid' ? 'aspect-square' : 'w-48 md:w-80 h-full flex-shrink-0'}`}>
+              <div className="relative overflow-hidden aspect-square">
                 <img src={l.images[0]} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-700" alt={l.title} />
                 {l.isPremium && (
                   <div className="absolute top-3 left-3 bg-gradient-to-r from-yellow-400 to-orange-500 text-white text-[9px] font-black uppercase px-3 py-1 rounded-full shadow-xl flex items-center border border-white/20">
@@ -141,9 +120,11 @@ export const ListingFeed: React.FC<ListingFeedProps> = ({
                     {l.title}
                   </h3>
                   <p className="text-xl md:text-2xl font-black text-gray-900">₹{l.price.toLocaleString('en-IN')}</p>
-                  <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest bg-gray-50 px-2.5 py-1 rounded-md inline-block">
-                    {l.category}
-                  </span>
+                  <div className="flex gap-2">
+                    <span className="text-[10px] text-gray-400 font-bold uppercase tracking-widest bg-gray-50 px-2.5 py-1 rounded-md inline-block">
+                      {l.category}
+                    </span>
+                  </div>
                 </div>
                 <div className="flex items-center justify-between mt-4 pt-4 border-t border-gray-50 text-[10px] font-bold text-gray-400 uppercase tracking-tighter">
                   <span><i className="far fa-clock mr-1.5"></i> {new Date(l.createdAt).toLocaleDateString()}</span>

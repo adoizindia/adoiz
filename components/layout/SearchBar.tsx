@@ -59,7 +59,8 @@ export const SearchBar: React.FC<SearchBarProps> = ({ city, onSearch, searchQuer
   };
 
   return (
-    <div className="bg-white border-b border-gray-100 py-3 lg:py-4 z-40">
+    /* Fix: Reduced vertical padding from py-3 lg:py-4 to py-0 to align background height exactly with the search bar input height */
+    <div className="bg-white border-b border-gray-100 py-0 z-40">
       <div className="max-w-7xl mx-auto px-4" ref={suggestionRef}>
         <div className="relative max-w-2xl mx-auto">
           <form onSubmit={handleSearchSubmit} className="relative group">
