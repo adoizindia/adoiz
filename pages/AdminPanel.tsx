@@ -80,6 +80,9 @@ export const AdminPanel: React.FC<{
   const [planForm, setPlanForm] = useState<Partial<SubscriptionPlan>>({ name: '', price: 0, durationDays: 30, features: [] });
   const [newFeature, setNewFeature] = useState('');
 
+  // New Resource Form State
+  const [resourceForm, setResourceForm] = useState({ label: '', url: '', content: '' });
+
   const getCityName = (id: string) => CITIES.find(c => c.id === id)?.name || id;
 
   // Initial Load
@@ -303,6 +306,20 @@ export const AdminPanel: React.FC<{
     setIsProcessing(false);
   };
 
+  const handleAddResource = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!resourceForm.label) return;
+    const updated = [...(config.branding.resourceLinks || []), { ...resourceForm }];
+    setConfig({ ...config, branding: { ...config.branding, resourceLinks: updated } });
+    setResourceForm({ label: '', url: '', content: '' });
+    notify("Resource added. Save to apply.", "info");
+  };
+
+  const removeResource = (index: number) => {
+    const updated = (config.branding.resourceLinks || []).filter((_, i) => i !== index);
+    setConfig({ ...config, branding: { ...config.branding, resourceLinks: updated } });
+  };
+
   function getTabsForMenu(menu: MainMenu) {
     switch(menu) {
       case 'DASHBOARD': return [{ id: 'platform_meta', label: 'Platform Overview' }];
@@ -318,7 +335,13 @@ export const AdminPanel: React.FC<{
         { id: 'banner_ads', label: 'Banners' },
         { id: 'adsense', label: 'External Ads' }
       ];
-      case 'SYSTEM': return [{ id: 'branding', label: 'Branding' }, { id: 'logs', label: 'Activity Logs' }];
+      case 'SYSTEM': return [
+        { id: 'branding', label: 'Branding' }, 
+        { id: 'communication', label: 'Communication' },
+        { id: 'footer_settings', label: 'Footer' },
+        { id: 'legal', label: 'Legal & Resources' },
+        { id: 'logs', label: 'Activity Logs' }
+      ];
       default: return [];
     }
   }
@@ -991,7 +1014,7 @@ export const AdminPanel: React.FC<{
                 <div className="grid grid-cols-2 gap-8">
                    <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400 ml-1">Premium Ad Price (₹)</label><input type="number" className="w-full bg-gray-50 border p-5 rounded-2xl font-bold" value={config.premiumPrice} onChange={e => setConfig({...config, premiumPrice: Number(e.target.value)})} /></div>
                    <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400 ml-1">Free Ad Limit</label><input type="number" className="w-full bg-gray-50 border p-5 rounded-2xl font-bold" value={config.freeAdLimit} onChange={e => setConfig({...config, freeAdLimit: Number(e.target.value)})} /></div>
-                   <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400 ml-1">Blue Tick Verification (₹)</label><input type="number" className="w-full bg-gray-50 border p-5 rounded-2xl font-bold" value={config.blueTickPrice} onChange={e => setConfig({...config, blueTickPrice: Number(e.target.value)})} /></div>
+                   <div className="space-y-2"><label className="text-[10px) font-black uppercase text-gray-400 ml-1">Blue Tick Verification (₹)</label><input type="number" className="w-full bg-gray-50 border p-5 rounded-2xl font-bold" value={config.blueTickPrice} onChange={e => setConfig({...config, blueTickPrice: Number(e.target.value)})} /></div>
                 </div>
                 <div className="pt-6"><button onClick={handleConfigCommit} disabled={isProcessing} className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-black transition-all">Save Changes</button></div>
              </div>
@@ -1260,6 +1283,44 @@ export const AdminPanel: React.FC<{
               </div>
             </div>
 
+            {/* Social Login Configuration Section */}
+            <div className="pt-10 border-t border-gray-50">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-10 h-10 bg-orange-50 text-orange-600 rounded-xl flex items-center justify-center text-lg shadow-sm">
+                  <i className="fas fa-share-nodes"></i>
+                </div>
+                <h3 className="text-xl font-black uppercase text-gray-900 tracking-tight">Social Login Integration</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Google Client ID</label>
+                  <div className="relative">
+                    <i className="fab fa-google absolute left-5 top-1/2 -translate-y-1/2 text-rose-500"></i>
+                    <input 
+                      type="text" 
+                      className="w-full bg-gray-50 border border-gray-100 pl-12 pr-6 py-5 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all" 
+                      placeholder="0000000000-xxxxx.apps.googleusercontent.com"
+                      value={config.socialLogin?.googleClientId || ''} 
+                      onChange={e => setConfig({...config, socialLogin: {...config.socialLogin, googleClientId: e.target.value}})} 
+                    />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Facebook App ID</label>
+                  <div className="relative">
+                    <i className="fab fa-facebook absolute left-5 top-1/2 -translate-y-1/2 text-blue-600"></i>
+                    <input 
+                      type="text" 
+                      className="w-full bg-gray-50 border border-gray-100 pl-12 pr-6 py-5 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all" 
+                      placeholder="App ID from Meta Developers"
+                      value={config.socialLogin?.facebookAppId || ''} 
+                      onChange={e => setConfig({...config, socialLogin: {...config.socialLogin, facebookAppId: e.target.value}})} 
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
+
             <div className="pt-10 border-t border-gray-50">
               <div className="flex items-center justify-between p-6 bg-gray-50 rounded-[2rem] border border-gray-100">
                 <div>
@@ -1282,7 +1343,346 @@ export const AdminPanel: React.FC<{
                 className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl hover:bg-black transition-all flex items-center justify-center gap-3"
               >
                 {isProcessing ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-save"></i>}
-                Save Branding & PWA Settings
+                Save Branding & Integration Settings
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (activeTab === 'communication') {
+      return (
+        <div className="max-w-4xl space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-12">
+            <div>
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-10 h-10 bg-emerald-50 text-emerald-600 rounded-xl flex items-center justify-center text-lg shadow-sm">
+                  <i className="fas fa-headset"></i>
+                </div>
+                <h3 className="text-xl font-black uppercase text-gray-900 tracking-tight">Support Channels</h3>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Support Email</label>
+                  <input 
+                    type="email" 
+                    className="w-full bg-gray-50 border border-gray-100 p-5 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all" 
+                    value={config.branding.supportEmail} 
+                    onChange={e => setConfig({...config, branding: {...config.branding, supportEmail: e.target.value}})} 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Support Phone</label>
+                  <input 
+                    type="text" 
+                    className="w-full bg-gray-50 border border-gray-100 p-5 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all" 
+                    value={config.branding.supportPhone} 
+                    onChange={e => setConfig({...config, branding: {...config.branding, supportPhone: e.target.value}})} 
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Email OTP Setup Section */}
+            <div className="pt-10 border-t border-gray-50">
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center text-lg shadow-sm">
+                    <i className="fas fa-envelope-shield"></i>
+                  </div>
+                  <h3 className="text-xl font-black uppercase text-gray-900 tracking-tight">Email OTP Gateway (SMTP)</h3>
+                </div>
+                <button 
+                  onClick={() => setConfig({...config, otpConfig: {...config.otpConfig, email: {...config.otpConfig.email, enabled: !config.otpConfig.email.enabled}}})}
+                  className={`w-16 h-8 rounded-full transition-all relative ${config.otpConfig.email.enabled ? 'bg-emerald-50' : 'bg-gray-300'}`}
+                >
+                  <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${config.otpConfig.email.enabled ? 'left-9' : 'left-1'}`}></div>
+                </button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">SMTP Host</label>
+                  <input 
+                    type="text" 
+                    className="w-full bg-gray-50 border border-gray-100 p-5 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all" 
+                    value={config.otpConfig.email.smtpHost} 
+                    onChange={e => setConfig({...config, otpConfig: {...config.otpConfig, email: {...config.otpConfig.email, smtpHost: e.target.value}}})} 
+                    placeholder="smtp.gmail.com"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">SMTP Port</label>
+                  <input 
+                    type="number" 
+                    className="w-full bg-gray-50 border border-gray-100 p-5 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all" 
+                    value={config.otpConfig.email.smtpPort} 
+                    onChange={e => setConfig({...config, otpConfig: {...config.otpConfig, email: {...config.otpConfig.email, smtpPort: Number(e.target.value)}}})} 
+                    placeholder="587"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">SMTP Username</label>
+                  <input 
+                    type="text" 
+                    className="w-full bg-gray-50 border border-gray-100 p-5 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all" 
+                    value={config.otpConfig.email.smtpUser} 
+                    onChange={e => setConfig({...config, otpConfig: {...config.otpConfig, email: {...config.otpConfig.email, smtpUser: e.target.value}}})} 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">SMTP Password</label>
+                  <input 
+                    type="password" 
+                    className="w-full bg-gray-50 border border-gray-100 p-5 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all" 
+                    value={config.otpConfig.email.smtpPass} 
+                    onChange={e => setConfig({...config, otpConfig: {...config.otpConfig, email: {...config.otpConfig.email, smtpPass: e.target.value}}})} 
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* SMS OTP Setup Section */}
+            <div className="pt-10 border-t border-gray-50">
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-4">
+                  <div className="w-10 h-10 bg-amber-50 text-amber-600 rounded-xl flex items-center justify-center text-lg shadow-sm">
+                    <i className="fas fa-comment-sms"></i>
+                  </div>
+                  <h3 className="text-xl font-black uppercase text-gray-900 tracking-tight">SMS OTP Gateway</h3>
+                </div>
+                <button 
+                  onClick={() => setConfig({...config, otpConfig: {...config.otpConfig, sms: {...config.otpConfig.sms, enabled: !config.otpConfig.sms.enabled}}})}
+                  className={`w-16 h-8 rounded-full transition-all relative ${config.otpConfig.sms.enabled ? 'bg-emerald-50' : 'bg-gray-300'}`}
+                >
+                  <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${config.otpConfig.sms.enabled ? 'left-9' : 'left-1'}`}></div>
+                </button>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">SMS Provider</label>
+                  <select 
+                    className="w-full bg-gray-50 border border-gray-100 p-5 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all appearance-none"
+                    value={config.otpConfig.sms.provider}
+                    onChange={e => setConfig({...config, otpConfig: {...config.otpConfig, sms: {...config.otpConfig.sms, provider: e.target.value as any}}})}
+                  >
+                    <option value="MSG91">MSG91</option>
+                    <option value="TWILIO">Twilio</option>
+                    <option value="OTHER">Generic HTTP API</option>
+                  </select>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Sender ID / SID</label>
+                  <input 
+                    type="text" 
+                    className="w-full bg-gray-50 border border-gray-100 p-5 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all" 
+                    value={config.otpConfig.sms.senderId} 
+                    onChange={e => setConfig({...config, otpConfig: {...config.otpConfig, sms: {...config.otpConfig.sms, senderId: e.target.value}}})} 
+                    placeholder="ADOIZ"
+                  />
+                </div>
+                <div className="col-span-1 md:col-span-2 space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">API Key / Token</label>
+                  <input 
+                    type="text" 
+                    className="w-full bg-gray-50 border border-gray-100 p-5 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all" 
+                    value={config.otpConfig.sms.apiKey} 
+                    onChange={e => setConfig({...config, otpConfig: {...config.otpConfig, sms: {...config.otpConfig.sms, apiKey: e.target.value}}})} 
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4">
+              <button 
+                onClick={handleConfigCommit} 
+                disabled={isProcessing} 
+                className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl hover:bg-black transition-all flex items-center justify-center gap-3"
+              >
+                {isProcessing ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-save"></i>}
+                Save Communication & OTP Settings
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (activeTab === 'footer_settings') {
+      return (
+        <div className="max-w-4xl space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-12">
+            <div>
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center text-lg shadow-sm">
+                  <i className="fas fa-shoe-prints"></i>
+                </div>
+                <h3 className="text-xl font-black uppercase text-gray-900 tracking-tight">Footer Identity</h3>
+              </div>
+              
+              <div className="space-y-8">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Footer Copyright Text</label>
+                  <input 
+                    type="text" 
+                    className="w-full bg-gray-50 border border-gray-100 p-5 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all" 
+                    value={config.branding.footerText} 
+                    onChange={e => setConfig({...config, branding: {...config.branding, footerText: e.target.value}})} 
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Physical Office Address</label>
+                  <textarea 
+                    className="w-full bg-gray-50 border border-gray-100 p-5 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all h-32" 
+                    value={config.branding.address} 
+                    onChange={e => setConfig({...config, branding: {...config.branding, address: e.target.value}})} 
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-10 border-t border-gray-50">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center text-lg shadow-sm">
+                  <i className="fas fa-share-nodes"></i>
+                </div>
+                <h3 className="text-xl font-black uppercase text-gray-900 tracking-tight">Social Media Links</h3>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Facebook URL</label>
+                  <input 
+                    type="url" 
+                    className="w-full bg-gray-50 border border-gray-100 p-4 rounded-xl font-bold text-xs" 
+                    value={config.branding.social.facebook} 
+                    onChange={e => setConfig({...config, branding: {...config.branding, social: {...config.branding.social, facebook: e.target.value}}})} 
+                    placeholder="https://facebook.com/..."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Instagram URL</label>
+                  <input 
+                    type="url" 
+                    className="w-full bg-gray-50 border border-gray-100 p-4 rounded-xl font-bold text-xs" 
+                    value={config.branding.social.instagram} 
+                    onChange={e => setConfig({...config, branding: {...config.branding, social: {...config.branding.social, instagram: e.target.value}}})} 
+                    placeholder="https://instagram.com/..."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Twitter (X) URL</label>
+                  <input 
+                    type="url" 
+                    className="w-full bg-gray-50 border border-gray-100 p-4 rounded-xl font-bold text-xs" 
+                    value={config.branding.social.twitter} 
+                    onChange={e => setConfig({...config, branding: {...config.branding, social: {...config.branding.social, twitter: e.target.value}}})} 
+                    placeholder="https://twitter.com/..."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">LinkedIn URL</label>
+                  <input 
+                    type="url" 
+                    className="w-full bg-gray-50 border border-gray-100 p-4 rounded-xl font-bold text-xs" 
+                    value={config.branding.social.linkedin} 
+                    onChange={e => setConfig({...config, branding: {...config.branding, social: {...config.branding.social, linkedin: e.target.value}}})} 
+                    placeholder="https://linkedin.com/in/..."
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">YouTube URL</label>
+                  <input 
+                    type="url" 
+                    className="w-full bg-gray-50 border border-gray-100 p-4 rounded-xl font-bold text-xs" 
+                    value={config.branding.social.youtube} 
+                    onChange={e => setConfig({...config, branding: {...config.branding, social: {...config.branding.social, youtube: e.target.value}}})} 
+                    placeholder="https://youtube.com/..."
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-4">
+              <button 
+                onClick={handleConfigCommit} 
+                disabled={isProcessing} 
+                className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl hover:bg-black transition-all flex items-center justify-center gap-3"
+              >
+                {isProcessing ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-save"></i>}
+                Save Footer Configuration
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
+    if (activeTab === 'legal') {
+      return (
+        <div className="max-w-4xl space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-12">
+            <div>
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-10 h-10 bg-indigo-50 text-indigo-600 rounded-xl flex items-center justify-center text-lg shadow-sm">
+                  <i className="fas fa-file-contract"></i>
+                </div>
+                <h3 className="text-xl font-black uppercase text-gray-900 tracking-tight">Legal & Resources</h3>
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest ml-auto">Control modal pages and external links</p>
+              </div>
+            </div>
+
+            <div className="pt-4 border-t border-gray-50">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-10 h-10 bg-blue-50 text-blue-600 rounded-xl flex items-center justify-center text-lg shadow-sm">
+                  <i className="fas fa-link"></i>
+                </div>
+                <h3 className="text-xl font-black uppercase text-gray-900 tracking-tight">Resource Details & Quick Links</h3>
+              </div>
+
+              <div className="space-y-6 mb-10">
+                {(config.branding.resourceLinks || []).map((link, idx) => (
+                  <div key={idx} className="flex items-center justify-between p-6 bg-gray-50 rounded-[2rem] border border-gray-100 group">
+                    <div className="flex-1 min-w-0">
+                      <h4 className="text-sm font-black text-gray-900 uppercase">{link.label}</h4>
+                      <p className="text-[10px] text-gray-400 font-bold truncate mt-1">{link.url ? `URL: ${link.url}` : 'Page Content (Modal)'}</p>
+                    </div>
+                    <button onClick={() => removeResource(idx)} className="w-10 h-10 bg-white border border-gray-100 text-rose-500 rounded-xl flex items-center justify-center shadow-sm opacity-0 group-hover:opacity-100 transition-all hover:bg-rose-50"><i className="fas fa-trash-alt text-xs"></i></button>
+                  </div>
+                ))}
+                {(!config.branding.resourceLinks || config.branding.resourceLinks.length === 0) && (
+                  <div className="py-12 text-center text-gray-400 font-bold text-xs bg-gray-50 rounded-[2rem] border-2 border-dashed border-gray-200">No resource links added yet.</div>
+                )}
+              </div>
+
+              <form onSubmit={handleAddResource} className="bg-blue-50 p-8 rounded-[2.5rem] border border-blue-100 space-y-6">
+                <h4 className="text-xs font-black uppercase text-blue-900">Add New Resource Item</h4>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black uppercase text-blue-400 ml-1">Link Label</label>
+                    <input required type="text" className="w-full bg-white border border-blue-100 p-4 rounded-xl font-bold text-xs" value={resourceForm.label} onChange={e => setResourceForm({...resourceForm, label: e.target.value})} placeholder="e.g. Privacy Policy" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[9px] font-black uppercase text-blue-400 ml-1">External URL (Optional)</label>
+                    <input type="text" className="w-full bg-white border border-blue-100 p-4 rounded-xl font-bold text-xs" value={resourceForm.url} onChange={e => setResourceForm({...resourceForm, url: e.target.value})} placeholder="https://..." />
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[9px] font-black uppercase text-blue-400 ml-1">Page Content (If URL is empty, this will show in a modal)</label>
+                  <textarea className="w-full bg-white border border-blue-100 p-5 rounded-2xl font-bold text-xs h-48 outline-none focus:ring-4 focus:ring-blue-500/5 transition-all" value={resourceForm.content} onChange={e => setResourceForm({...resourceForm, content: e.target.value})} placeholder="Write detailed content here..." />
+                </div>
+                <button type="submit" className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-blue-100 hover:bg-blue-700 active:scale-95 transition-all">Add Resource Link</button>
+              </form>
+            </div>
+
+            <div className="pt-4">
+              <button 
+                onClick={handleConfigCommit} 
+                disabled={isProcessing} 
+                className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl hover:bg-black transition-all flex items-center justify-center gap-3"
+              >
+                {isProcessing ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-save"></i>}
+                Save Resource Changes
               </button>
             </div>
           </div>
@@ -1370,9 +1770,9 @@ export const AdminPanel: React.FC<{
             renderAdManagement()
          ) : (
             <>
-               <div className="flex items-center space-x-2 mb-12 bg-white p-1.5 rounded-[2.5rem] border border-gray-100 shadow-sm w-fit">
+               <div className="flex items-center space-x-2 mb-12 bg-white p-1.5 rounded-[2.5rem] border border-gray-100 shadow-sm w-fit overflow-x-auto hide-scrollbar">
                   {getTabsForMenu(activeMenu).map(tab => (
-                     <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-10 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeTab === tab.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-200' : 'text-gray-400 hover:bg-gray-50'}`}>{tab.label}</button>
+                     <button key={tab.id} onClick={() => setActiveTab(tab.id)} className={`px-10 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all whitespace-nowrap ${activeTab === tab.id ? 'bg-blue-600 text-white shadow-xl shadow-blue-200' : 'text-gray-400 hover:bg-gray-50'}`}>{tab.label}</button>
                   ))}
                </div>
                <div className="relative">

@@ -89,6 +89,22 @@ class DbService {
       resourceLinks: [{ label: 'Safety Center', url: '#' }]
     },
     socialLogin: { googleClientId: '', facebookAppId: '' },
+    otpConfig: {
+      email: {
+        enabled: false,
+        smtpHost: '',
+        smtpPort: 587,
+        smtpUser: '',
+        smtpPass: '',
+        smtpSecure: true
+      },
+      sms: {
+        enabled: false,
+        provider: 'MSG91',
+        apiKey: '',
+        senderId: ''
+      }
+    },
     paymentGateway: { razorpay: { active: true, keyId: '', keySecret: '' }, upiId: 'adoiz@upi' }
   };
 

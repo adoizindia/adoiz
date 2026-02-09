@@ -111,6 +111,22 @@ export interface SystemConfig {
     googleClientId: string;
     facebookAppId: string;
   };
+  otpConfig: {
+    email: {
+      enabled: boolean;
+      smtpHost: string;
+      smtpPort: number;
+      smtpUser: string;
+      smtpPass: string;
+      smtpSecure: boolean;
+    };
+    sms: {
+      enabled: boolean;
+      provider: 'MSG91' | 'TWILIO' | 'OTHER';
+      apiKey: string;
+      senderId: string;
+    };
+  };
   paymentGateway: {
     razorpay: { active: boolean; keyId: string; keySecret: string; };
     upiId: string;
