@@ -385,7 +385,10 @@ export const AdminPanel: React.FC<{
         { id: 'revanue', label: 'Revanue' },
         { id: 'broadcast', label: 'Broadcasting' }
       ];
-      case 'USERS': return [{ id: 'all_users', label: 'User List' }];
+      case 'USERS': return [
+        { id: 'all_users', label: 'User List' },
+        { id: 'moderator_mgmt', label: 'Moderator Management' }
+      ];
       case 'LISTINGS': return [{ id: 'inventory', label: 'All Ads' }];
       case 'GEO_CATS': return [
         { id: 'locations', label: 'Locations' },
@@ -1016,6 +1019,79 @@ export const AdminPanel: React.FC<{
     );
   };
 
+  const renderModerators = () => {
+    const moderators = users.filter(u => u.role === UserRole.MODERATOR && (u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.email.toLowerCase().includes(searchQuery.toLowerCase())));
+    
+    return (
+      <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="bg-white rounded-[3rem] border border-gray-100 shadow-sm overflow-hidden">
+          <div className="p-8 border-b border-gray-50 flex items-center justify-between bg-gray-50/20">
+             <div className="relative flex-1 max-w-md">
+                <i className="fas fa-search absolute left-5 top-1/2 -translate-y-1/2 text-gray-300"></i>
+                <input type="text" placeholder="Search moderators..." className="w-full bg-white border border-gray-100 rounded-2xl pl-12 pr-6 py-3 text-sm font-bold outline-none focus:ring-4 focus:ring-blue-500/5 transition-all" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+             </div>
+             <div className="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase">
+                {moderators.length} Moderators Total
+             </div>
+          </div>
+          
+          <table className="w-full text-left">
+             <thead>
+                <tr className="text-[10px] font-black uppercase text-gray-400 border-b border-gray-50">
+                   <th className="px-10 py-6">Moderator Identity</th>
+                   <th className="px-10 py-6">Assigned Regions</th>
+                   <th className="px-10 py-6 text-right">Actions</th>
+                </tr>
+             </thead>
+             <tbody className="divide-y divide-gray-50">
+                {moderators.map(u => (
+                  <tr key={u.id} className="text-xs font-bold hover:bg-gray-50 transition-colors">
+                     <td className="px-10 py-6">
+                        <div className="flex items-center gap-4">
+                           <img src={u.photo} className="w-10 h-10 rounded-xl object-cover" />
+                           <div>
+                              <p className="text-gray-900">{u.name}</p>
+                              <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">{u.email}</p>
+                           </div>
+                        </div>
+                     </td>
+                     <td className="px-10 py-6">
+                        <div className="flex flex-wrap gap-2 max-w-md">
+                           {(u.managedCityIds || []).length > 0 ? (
+                             u.managedCityIds?.map(cityId => (
+                               <span key={cityId} className="bg-blue-50 text-blue-600 px-2 py-1 rounded-md text-[8px] font-black uppercase tracking-tight border border-blue-100">
+                                  {getCityName(cityId)}
+                               </span>
+                             ))
+                           ) : (
+                             <span className="text-[8px] font-black text-gray-300 uppercase italic">No cities assigned</span>
+                           )}
+                        </div>
+                     </td>
+                     <td className="px-10 py-6 text-right">
+                        <button 
+                          onClick={() => { setSelectedUserId(u.id); setActiveUserDetailTab('IDENTITY'); }} 
+                          className="bg-slate-900 text-white px-4 py-2 rounded-xl text-[9px] font-black uppercase tracking-widest shadow-lg shadow-gray-200 hover:bg-black transition-all"
+                        >
+                          Manage Assignments
+                        </button>
+                     </td>
+                  </tr>
+                ))}
+                {moderators.length === 0 && (
+                  <tr>
+                     <td colSpan={3} className="px-10 py-20 text-center text-gray-400 font-black uppercase text-xs">
+                        No moderators found in the system.
+                     </td>
+                  </tr>
+                )}
+             </tbody>
+          </table>
+        </div>
+      </div>
+    );
+  };
+
   const renderUserDetail = () => {
     if (!detailUser) return <div className="py-20 text-center"><i className="fas fa-circle-notch fa-spin text-4xl text-blue-600"></i></div>;
     
@@ -1136,7 +1212,7 @@ export const AdminPanel: React.FC<{
                   </form>
                </div>
 
-               <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm h-fit">
+               <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm h-fit sticky top-8">
                   <h3 className="text-xl font-black uppercase text-gray-900 mb-6">Regional Command</h3>
                   <p className="text-[10px] text-gray-400 font-bold uppercase tracking-widest mb-6 leading-relaxed">Assign specific cities for this account to moderate and manage.</p>
                   <div className="space-y-2 max-h-[400px] overflow-y-auto pr-2 custom-scrollbar">
@@ -1989,7 +2065,8 @@ export const AdminPanel: React.FC<{
                   {loading && <div className="absolute inset-0 bg-gray-50/50 backdrop-blur-sm z-10 flex items-center justify-center py-20"><i className="fas fa-circle-notch fa-spin text-4xl text-blue-600"></i></div>}
                   {activeMenu === 'REVENUE' && renderRevenue()}
                   {activeMenu === 'DASHBOARD' && renderDashboard()}
-                  {activeMenu === 'USERS' && renderUsers()}
+                  {activeMenu === 'USERS' && activeTab === 'all_users' && renderUsers()}
+                  {activeMenu === 'USERS' && activeTab === 'moderator_mgmt' && renderModerators()}
                   {activeMenu === 'LISTINGS' && renderInventory()}
                   {activeMenu === 'GEO_CATS' && renderGeoCats()}
                   {activeMenu === 'SYSTEM' && renderSystem()}

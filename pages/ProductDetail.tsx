@@ -32,6 +32,7 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
   const [activeImageIndex, setActiveImageIndex] = useState(0);
   const [currentBannerIndex, setCurrentBannerIndex] = useState(0);
   const [sellerRatings, setSellerRatings] = useState<Rating[]>([]);
+  const config = dbService.getSystemConfig();
 
   // Reporting State
   const [showReportModal, setShowReportModal] = useState(false);
@@ -135,6 +136,10 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
     ));
   };
 
+  // Improved WhatsApp link with product context
+  const whatsappMessage = encodeURIComponent(`Hello! I saw your ad for "${listing.title}" on ${config.siteName}. Is it still available?`);
+  const whatsappUrl = `https://wa.me/${seller.whatsapp?.replace(/\D/g, '')}?text=${whatsappMessage}`;
+
   return (
     <div className="max-w-7xl mx-auto p-0">
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-6">
@@ -233,7 +238,7 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
               ) : (
                 <button onClick={handleReveal} className="flex flex-col items-center justify-center bg-blue-600 text-white py-4 rounded-2xl shadow-xl shadow-blue-100 hover:bg-blue-700 transition-all group"><i className="fas fa-phone text-lg mb-1 group-hover:rotate-12 transition-transform"></i><span className="text-[8px] font-black uppercase tracking-widest">Call</span></button>
               )}
-              <a href={`https://wa.me/${seller.whatsapp?.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center justify-center bg-emerald-500 text-white py-4 rounded-2xl shadow-xl shadow-emerald-100 hover:bg-emerald-600 transition-all"><i className="fab fa-whatsapp text-xl mb-1"></i><span className="text-[8px] font-black uppercase tracking-widest">WhatsApp</span></a>
+              <a href={whatsappUrl} target="_blank" rel="noopener noreferrer" className="flex flex-col items-center justify-center bg-emerald-500 text-white py-4 rounded-2xl shadow-xl shadow-emerald-100 hover:bg-emerald-600 transition-all"><i className="fab fa-whatsapp text-xl mb-1"></i><span className="text-[8px] font-black uppercase tracking-widest">WhatsApp</span></a>
               <button onClick={handleContact} disabled={isConnecting} className="flex flex-col items-center justify-center bg-gray-900 text-white py-4 rounded-2xl shadow-xl shadow-gray-100 hover:bg-black transition-all disabled:opacity-50">{isConnecting ? <i className="fas fa-circle-notch fa-spin text-lg"></i> : <><i className="fas fa-comment-dots text-lg mb-1"></i><span className="text-[8px] font-black uppercase tracking-widest">Chat</span></>}</button>
             </div>
             <div className="mt-8 bg-orange-50 p-4 rounded-2xl border border-orange-100">
@@ -355,7 +360,7 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
                 <h3 className="text-2xl font-black">Report Ad</h3>
                 <p className="text-rose-100 text-xs mt-1">Help us keep adoiz safe</p>
               </div>
-              <form onSubmit={handleReportSubmit} className="p-10 space-y-6">
+              <form handleReportSubmit={handleReportSubmit} className="p-10 space-y-6">
                  <div className="space-y-1">
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Reason for Reporting</label>
                     <select required className="w-full bg-gray-50 border border-gray-100 p-4 rounded-xl font-bold text-sm outline-none focus:bg-white transition-all" value={reportForm.reason} onChange={e => setReportForm({...reportForm, reason: e.target.value as AdReport['reason']})}>

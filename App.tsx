@@ -144,7 +144,15 @@ const App: React.FC = () => {
   const handleContactSeller = async (listing: Listing, seller: User) => {
     if (!user) { setView('AUTH'); return; }
     if (user.id === seller.id) { showToast("You cannot chat with yourself.", "info"); return; }
+    
     const chat = await dbService.getOrCreateChat(user.id, seller.id, listing, seller.name);
+    
+    // Check if chat is new (no messages) and send an automated context message
+    const messages = await dbService.getMessages(chat.id);
+    if (messages.length === 0) {
+      await dbService.sendMessage(chat.id, user.id, `Hi! I'm interested in your ad: "${listing.title}". Is it still available?`);
+    }
+
     setSelectedChat(chat);
     setView('CHAT_ROOM');
   };
