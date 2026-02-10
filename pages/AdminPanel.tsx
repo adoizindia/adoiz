@@ -10,7 +10,7 @@ import { CITIES, STATES } from '../constants';
 type MainMenu = 
   | 'DASHBOARD' | 'USERS' | 'LISTINGS' | 'GEO_CATS' | 'REVENUE' | 'SYSTEM';
 
-type UserDetailTab = 'IDENTITY' | 'FINANCIAL' | 'INVENTORY' | 'RATINGS';
+type UserDetailTab = 'IDENTITY' | 'FINANCIAL' | 'INVENTORY' | 'BANNERS' | 'RATINGS';
 
 type RevenueFilter = '7d' | '1m' | '3m' | '6m' | '12m';
 
@@ -66,6 +66,7 @@ export const AdminPanel: React.FC<{
   const [detailUser, setDetailUser] = useState<User | null>(null);
   const [detailListing, setDetailListing] = useState<Listing | null>(null);
   const [detailAds, setDetailAds] = useState<Listing[]>([]);
+  const [detailBanners, setDetailBanners] = useState<BannerAd[]>([]);
   const [detailTxns, setDetailTxns] = useState<WalletTransaction[]>([]);
   const [walletForm, setWalletForm] = useState({ amount: '', type: 'CREDIT' as 'CREDIT' | 'DEBIT', reason: '' });
 
@@ -136,15 +137,17 @@ export const AdminPanel: React.FC<{
 
   const loadUserDetails = async (id: string) => {
     setIsProcessing(true);
-    const [u, ads, txns] = await Promise.all([
+    const [u, ads, txns, userBanners] = await Promise.all([
       dbService.getUserById(id),
       dbService.getListingsBySeller(id),
-      dbService.getTransactionsByUserId(id)
+      dbService.getTransactionsByUserId(id),
+      dbService.getUserBanners(id)
     ]);
     if (u) {
       setDetailUser(u);
       setUserEditForm({ ...u });
       setDetailAds(ads);
+      setDetailBanners(userBanners);
       setDetailTxns(txns.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
     }
     setIsProcessing(false);
@@ -283,6 +286,20 @@ export const AdminPanel: React.FC<{
       notify("Ad removed permanently.", "error");
       loadData();
       if (selectedListingId === id) setSelectedListingId(null);
+    } catch (err: any) {
+      notify(err.message, "error");
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleUserBannerStatusUpdate = async (id: string, status: BannerAd['status']) => {
+    setIsProcessing(true);
+    try {
+      await dbService.adminUpdateBannerStatus(id, status, undefined, user.id);
+      notify(`Banner ad updated to ${status}.`, "success");
+      if (detailUser) loadUserDetails(detailUser.id);
+      loadData();
     } catch (err: any) {
       notify(err.message, "error");
     } finally {
@@ -837,7 +854,7 @@ export const AdminPanel: React.FC<{
                        </select>
                     </div>
                     <div className="w-full md:w-48 space-y-1.5">
-                       <label className="text-[9px] font-black uppercase text-gray-400 ml-1 tracking-widest">Filter State</label>
+                       <label className="text-[9px) font-black uppercase text-gray-400 ml-1 tracking-widest">Filter State</label>
                        <select 
                          className="w-full bg-white border border-gray-200 px-4 py-2.5 rounded-xl text-xs font-bold outline-none disabled:opacity-50"
                          disabled={!geoFilterCountry && countries.length > 1}
@@ -1128,7 +1145,8 @@ export const AdminPanel: React.FC<{
             {[
               {id: 'IDENTITY', label: 'Identity & Access'},
               {id: 'FINANCIAL', label: 'Wallet & Ledgers'},
-              {id: 'INVENTORY', label: 'Advertisements'}
+              {id: 'INVENTORY', label: 'Advertisements'},
+              {id: 'BANNERS', label: 'Banner Ads'}
             ].map(tab => (
                <button key={tab.id} onClick={() => setActiveUserDetailTab(tab.id as any)} className={`px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeUserDetailTab === tab.id ? 'bg-slate-900 text-white' : 'text-gray-400 hover:bg-gray-50'}`}>{tab.label}</button>
             ))}
@@ -1285,6 +1303,66 @@ export const AdminPanel: React.FC<{
                {detailAds.length === 0 && (
                   <div className="col-span-full py-20 text-center text-gray-400 font-black uppercase text-xs">This user has zero active advertisements.</div>
                )}
+            </div>
+         )}
+
+         {activeUserDetailTab === 'BANNERS' && (
+            <div className="bg-white rounded-[3rem] border border-gray-100 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+               <div className="p-8 border-b border-gray-50 bg-gray-50/20 flex justify-between items-center">
+                  <h3 className="text-xl font-black uppercase text-gray-900 tracking-tight">User's Banner Advertisements</h3>
+                  <div className="bg-blue-50 text-blue-600 px-4 py-1 rounded-xl text-[10px] font-black uppercase">{detailBanners.length} Total Banners</div>
+               </div>
+               <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                     <thead>
+                        <tr className="text-[10px] font-black uppercase text-gray-400 border-b border-gray-50">
+                           <th className="px-10 py-6">Banner Preview</th>
+                           <th className="px-10 py-6">City</th>
+                           <th className="px-10 py-6">Status</th>
+                           <th className="px-10 py-6 text-right">Actions</th>
+                        </tr>
+                     </thead>
+                     <tbody className="divide-y divide-gray-50">
+                        {detailBanners.map(b => (
+                           <tr key={b.id} className="text-xs font-bold hover:bg-gray-50 transition-colors">
+                              <td className="px-10 py-6">
+                                 <div className="flex items-center gap-6">
+                                    <div className="w-32 h-16 rounded-xl overflow-hidden border border-gray-100 bg-gray-50 flex-shrink-0">
+                                       <img src={b.imageUrl} className="w-full h-full object-cover" alt="" />
+                                    </div>
+                                    <div>
+                                       <p className="text-gray-900 font-black truncate max-w-[200px]">{b.title || 'Untitled'}</p>
+                                       <a href={b.linkUrl} target="_blank" rel="noreferrer" className="text-[9px] text-blue-500 hover:underline uppercase truncate block max-w-[200px] mt-1">{b.linkUrl}</a>
+                                    </div>
+                                 </div>
+                              </td>
+                              <td className="px-10 py-6">
+                                 <span className="text-[10px] font-black text-gray-900 uppercase">{getCityName(b.cityId)}</span>
+                              </td>
+                              <td className="px-10 py-6">
+                                 <span className={`px-3 py-1 rounded-lg text-[9px] font-black uppercase ${b.status === 'LIVE' ? 'bg-emerald-50 text-emerald-600' : b.status === 'REJECTED' ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'}`}>
+                                    {b.status}
+                                 </span>
+                              </td>
+                              <td className="px-10 py-6 text-right">
+                                 <div className="flex items-center justify-end gap-3">
+                                    {b.status !== 'LIVE' && (
+                                       <button onClick={() => handleUserBannerStatusUpdate(b.id, 'LIVE')} className="w-8 h-8 bg-emerald-50 text-emerald-600 rounded-lg hover:bg-emerald-600 hover:text-white transition-all flex items-center justify-center" title="Approve"><i className="fas fa-check text-[10px]"></i></button>
+                                    )}
+                                    {b.status !== 'REJECTED' && (
+                                       <button onClick={() => handleUserBannerStatusUpdate(b.id, 'REJECTED')} className="w-8 h-8 bg-rose-50 text-rose-600 rounded-lg hover:bg-rose-500 hover:text-white transition-all flex items-center justify-center" title="Reject"><i className="fas fa-times text-[10px]"></i></button>
+                                    )}
+                                    <button onClick={() => { if(window.confirm('Remove this banner?')) { notify('Banner removed.', 'info') } }} className="w-8 h-8 bg-slate-900 text-slate-400 rounded-lg hover:bg-black hover:text-rose-500 transition-all flex items-center justify-center" title="Delete"><i className="fas fa-trash text-[10px]"></i></button>
+                                 </div>
+                              </td>
+                           </tr>
+                        ))}
+                        {detailBanners.length === 0 && (
+                           <tr><td colSpan={4} className="px-10 py-20 text-center text-gray-400 font-black uppercase text-xs italic">This user has not posted any banner advertisements.</td></tr>
+                        )}
+                     </tbody>
+                  </table>
+               </div>
             </div>
          )}
       </div>
