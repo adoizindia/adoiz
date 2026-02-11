@@ -415,7 +415,8 @@ export const AdminPanel: React.FC<{
         { id: 'pricing', label: 'Ad Pricing' }, 
         { id: 'subscribe', label: 'Plans' },
         { id: 'banner_ads', label: 'Banners' },
-        { id: 'adsense', label: 'External Ads' }
+        { id: 'adsense', label: 'External Ads' },
+        { id: 'gateways', label: 'Gateways' }
       ];
       case 'SYSTEM': return [
         { id: 'branding', label: 'Branding' }, 
@@ -1442,7 +1443,7 @@ export const AdminPanel: React.FC<{
                      onChange={e => setConfig({...config, bannerAdTierPrices: {...config.bannerAdTierPrices, T1: Number(e.target.value)}})} />
                  </div>
                  <div className="space-y-2">
-                   <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Tier 2 Cities (Standard) (₹)</label>
+                   <label className="text-[10px) font-black uppercase text-gray-400 ml-1">Tier 2 Cities (Standard) (₹)</label>
                    <input type="number" className="w-full bg-gray-50 border p-5 rounded-2xl font-bold" 
                      value={config.bannerAdTierPrices.T2} 
                      onChange={e => setConfig({...config, bannerAdTierPrices: {...config.bannerAdTierPrices, T2: Number(e.target.value)}})} />
@@ -1556,6 +1557,89 @@ export const AdminPanel: React.FC<{
               >
                 {isProcessing ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-cloud-upload-alt"></i>}
                 Deploy AdSense Configuration
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    if (activeTab === 'gateways') {
+      return (
+        <div className="max-w-4xl space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+          <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-12">
+            <div>
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center text-xl shadow-sm">
+                    <i className="fas fa-credit-card"></i>
+                  </div>
+                  <div>
+                    <h3 className="text-xl font-black uppercase text-gray-900 tracking-tight">Razorpay Settings</h3>
+                    <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Configure automated payment processing</p>
+                  </div>
+                </div>
+                <button 
+                  onClick={() => setConfig({...config, paymentGateway: {...config.paymentGateway, razorpay: {...config.paymentGateway.razorpay, active: !config.paymentGateway.razorpay.active}}})}
+                  className={`w-16 h-8 rounded-full transition-all relative ${config.paymentGateway.razorpay.active ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                >
+                  <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${config.paymentGateway.razorpay.active ? 'left-9' : 'left-1'}`}></div>
+                </button>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Key ID</label>
+                  <input 
+                    type="text" 
+                    className="w-full bg-gray-50 border border-gray-100 p-5 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all" 
+                    value={config.paymentGateway.razorpay.keyId} 
+                    onChange={e => setConfig({...config, paymentGateway: {...config.paymentGateway, razorpay: {...config.paymentGateway.razorpay, keyId: e.target.value}}})} 
+                    placeholder="rzp_live_xxxxxxxxxxxxxx"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Key Secret</label>
+                  <input 
+                    type="password" 
+                    className="w-full bg-gray-50 border border-gray-100 p-5 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all" 
+                    value={config.paymentGateway.razorpay.keySecret} 
+                    onChange={e => setConfig({...config, paymentGateway: {...config.paymentGateway, razorpay: {...config.paymentGateway.razorpay, keySecret: e.target.value}}})} 
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="pt-10 border-t border-gray-50">
+              <div className="flex items-center gap-4 mb-8">
+                <div className="w-12 h-12 bg-emerald-50 text-emerald-600 rounded-2xl flex items-center justify-center text-xl shadow-sm">
+                  <i className="fas fa-mobile-screen"></i>
+                </div>
+                <div>
+                  <h3 className="text-xl font-black uppercase text-gray-900 tracking-tight">UPI Configuration</h3>
+                  <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Manual payment collection settings</p>
+                </div>
+              </div>
+
+              <div className="space-y-2 max-w-md">
+                <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Business UPI ID</label>
+                <input 
+                  type="text" 
+                  className="w-full bg-gray-50 border border-gray-100 p-5 rounded-2xl font-bold outline-none focus:bg-white focus:border-emerald-500 transition-all" 
+                  value={config.paymentGateway.upiId} 
+                  onChange={e => setConfig({...config, paymentGateway: {...config.paymentGateway, upiId: e.target.value}})} 
+                  placeholder="name@upi"
+                />
+              </div>
+            </div>
+
+            <div className="pt-4">
+              <button 
+                onClick={handleConfigCommit} 
+                disabled={isProcessing} 
+                className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl hover:bg-black transition-all flex items-center justify-center gap-3"
+              >
+                {isProcessing ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-save"></i>}
+                Save Gateway Configurations
               </button>
             </div>
           </div>
