@@ -1,7 +1,8 @@
+
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Listing, ListingStatus, UserRole, WalletTransaction, SubscriptionPlan, BannerAd, City } from '../types';
+import { User, Listing, ListingStatus, UserRole, WalletTransaction, SubscriptionPlan, BannerAd, City, State } from '../types';
 import { dbService } from '../services/dbService';
-import { CITIES } from '../constants';
+import { CITIES, STATES } from '../constants';
 
 interface DashboardProps {
   user: User;
@@ -23,7 +24,7 @@ const notify = (message: string, type: 'success' | 'error' | 'info' = 'success')
 export const Dashboard: React.FC<DashboardProps> = ({ 
   user, listings, onEdit, onDelete, onBoost, onPostNew, onAddFunds, onUpdateUser, onAdminPanel, onLogout
 }) => {
-  const [activeTab, setActiveTab] = useState<'ADS' | 'BANNERS' | 'SUBSCRIPTION' | 'TRANSACTIONS'>('ADS');
+  const [activeTab, setActiveTab] = useState<'ADS' | 'BANNERS' | 'SUBSCRIPTION' | 'TRANSACTIONS' | 'PROFILE'>('ADS');
   const [showRechargeModal, setShowRechargeModal] = useState(false);
   const [showBannerModal, setShowBannerModal] = useState(false);
   const [rechargeAmount, setRechargeAmount] = useState('');
@@ -31,7 +32,21 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [userBanners, setUserBanners] = useState<BannerAd[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const profilePhotoInputRef = useRef<HTMLInputElement>(null);
   
+  // Profile Form State
+  const [profileForm, setProfileForm] = useState({
+    name: user.name,
+    email: user.email,
+    mobile: user.mobile || '',
+    whatsapp: user.whatsapp || '',
+    address: user.address || '',
+    photo: user.photo || '',
+    cityId: user.cityId || '',
+    stateId: user.stateId || '',
+    countryId: user.countryId || 'ctr1'
+  });
+
   // Banner Form State
   const [bannerForm, setBannerForm] = useState({
     title: '',
@@ -83,6 +98,31 @@ export const Dashboard: React.FC<DashboardProps> = ({
     }
   };
 
+  const handleProfilePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setProfileForm(prev => ({ ...prev, photo: reader.result as string }));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  const handleUpdateProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsProcessing('profile');
+    try {
+      const updatedUser = await dbService.updateUserProfile(user.id, profileForm);
+      if (updatedUser && onUpdateUser) onUpdateUser(updatedUser);
+      notify("Profile updated successfully!", "success");
+    } catch (err: any) {
+      notify(err.message, "error");
+    } finally {
+      setIsProcessing(null);
+    }
+  };
+
   const handlePostBanner = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!bannerForm.imageUrl) {
@@ -118,8 +158,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
     <div className="max-w-7xl mx-auto px-4 py-12 pb-32">
       {/* Header Profile Section */}
       <div className="bg-white rounded-[3rem] p-10 md:p-14 shadow-sm border border-gray-100 mb-10 flex flex-col md:flex-row items-center gap-10">
-        <div className="relative">
-          <img src={user.photo} className="w-40 h-40 rounded-[2.5rem] object-cover border-4 border-white shadow-2xl" alt="" />
+        <div className="relative group cursor-pointer" onClick={() => setActiveTab('PROFILE')}>
+          <img src={user.photo} className="w-40 h-40 rounded-[2.5rem] object-cover border-4 border-white shadow-2xl transition-transform group-hover:scale-105" alt="" />
+          <div className="absolute inset-0 bg-black/20 rounded-[2.5rem] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+            <i className="fas fa-camera text-white text-2xl"></i>
+          </div>
           {user.isVerified && <div className="absolute -bottom-2 -right-2 bg-blue-600 text-white w-10 h-10 rounded-full flex items-center justify-center border-4 border-white shadow-lg"><i className="fas fa-check"></i></div>}
         </div>
         <div className="flex-1 text-center md:text-left">
@@ -140,6 +183,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
         {[
           {id: 'ADS', label: 'My Ads'},
           {id: 'BANNERS', label: 'Banner Ads'},
+          {id: 'PROFILE', label: 'Profile Settings'},
           {id: 'SUBSCRIPTION', label: 'Membership'},
           {id: 'TRANSACTIONS', label: 'Payments'}
         ].map(tab => (
@@ -196,7 +240,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                   <div className="aspect-[4/1] rounded-2xl overflow-hidden bg-gray-100 border border-gray-50">
                     <img src={b.imageUrl} className="w-full h-full object-cover" alt="" />
                   </div>
-                  <div className="flex justify-between items-center">
+                  <div className="flex justify-between items-start">
                     <div>
                       <h4 className="font-black text-gray-900 text-xl truncate mb-1">{b.title}</h4>
                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Target City: {CITIES.find(c => c.id === b.cityId)?.name}</p>
@@ -211,6 +255,76 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 </div>
               ))}
               {userBanners.length === 0 && <div className="col-span-2 text-center py-24 bg-gray-50 rounded-[3rem] border-2 border-dashed border-gray-200 text-gray-400 font-black uppercase text-xs">No active banner ads. Start advertising now!</div>}
+            </div>
+          </div>
+        )}
+
+        {activeTab === 'PROFILE' && (
+          <div className="space-y-8 max-w-4xl mx-auto">
+            <h2 className="text-2xl font-black text-gray-900 uppercase tracking-tight">Update My Profile</h2>
+            <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm">
+               <form onSubmit={handleUpdateProfile} className="space-y-8">
+                  {/* Photo Section */}
+                  <div className="flex flex-col items-center gap-4 border-b border-gray-50 pb-8">
+                     <div className="relative group w-32 h-32">
+                        <img src={profileForm.photo} className="w-full h-full rounded-[2rem] object-cover border-4 border-gray-50 shadow-lg" alt="" />
+                        <button 
+                          type="button" 
+                          onClick={() => profilePhotoInputRef.current?.click()}
+                          className="absolute inset-0 bg-black/40 rounded-[2rem] opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center text-white"
+                        >
+                          <i className="fas fa-edit"></i>
+                        </button>
+                     </div>
+                     <input type="file" ref={profilePhotoInputRef} className="hidden" accept="image/*" onChange={handleProfilePhotoUpload} />
+                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest">Profile Picture</p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Full Identity Name</label>
+                       <input type="text" required className="w-full bg-gray-50 border border-gray-100 p-4 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all" value={profileForm.name} onChange={e => setProfileForm({...profileForm, name: e.target.value})} />
+                    </div>
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Verified Email (Readonly)</label>
+                       <input type="email" readOnly className="w-full bg-gray-100 border border-gray-100 p-4 rounded-2xl font-bold text-gray-400 outline-none" value={profileForm.email} />
+                    </div>
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Mobile Contact</label>
+                       <input type="tel" required className="w-full bg-gray-50 border border-gray-100 p-4 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all" value={profileForm.mobile} onChange={e => setProfileForm({...profileForm, mobile: e.target.value})} placeholder="+91 00000 00000" />
+                    </div>
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">WhatsApp Number</label>
+                       <input type="tel" className="w-full bg-gray-50 border border-gray-100 p-4 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all" value={profileForm.whatsapp} onChange={e => setProfileForm({...profileForm, whatsapp: e.target.value})} placeholder="+91 00000 00000" />
+                    </div>
+                    
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">State</label>
+                       <select className="w-full bg-gray-50 border border-gray-100 p-4 rounded-2xl font-bold outline-none appearance-none" value={profileForm.stateId} onChange={e => setProfileForm({...profileForm, stateId: e.target.value, cityId: ''})}>
+                          <option value="">Select State</option>
+                          {STATES.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                       </select>
+                    </div>
+                    <div className="space-y-2">
+                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Default City</label>
+                       <select className="w-full bg-gray-50 border border-gray-100 p-4 rounded-2xl font-bold outline-none appearance-none" value={profileForm.cityId} onChange={e => setProfileForm({...profileForm, cityId: e.target.value})}>
+                          <option value="">Select City</option>
+                          {CITIES.filter(c => !profileForm.stateId || c.stateId === profileForm.stateId).map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                       </select>
+                    </div>
+                    
+                    <div className="md:col-span-2 space-y-2">
+                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Physical Address / Shipping Info</label>
+                       <textarea className="w-full bg-gray-50 border border-gray-100 p-5 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all h-24" value={profileForm.address} onChange={e => setProfileForm({...profileForm, address: e.target.value})} placeholder="House No, Building, Area, PIN Code..." />
+                    </div>
+                  </div>
+
+                  <div className="pt-4">
+                     <button type="submit" disabled={isProcessing === 'profile'} className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl hover:bg-black transition-all flex items-center justify-center gap-3">
+                        {isProcessing === 'profile' ? <i className="fas fa-circle-notch fa-spin"></i> : <i className="fas fa-save"></i>} Save Profile Changes
+                     </button>
+                  </div>
+               </form>
             </div>
           </div>
         )}
@@ -354,7 +468,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
                     <div>
                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Target Link URL</label>
-                       <input required type="url" className="w-full bg-gray-50 border border-gray-200 p-4 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all" value={bannerForm.linkUrl} onChange={e => setBannerForm({...bannerForm, linkUrl: e.target.value})} placeholder="https://your-website.com" />
+                       <input required type="url" className="w-full bg-gray-50 border border-gray-100 p-4 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all" value={bannerForm.linkUrl} onChange={e => setBannerForm({...bannerForm, linkUrl: e.target.value})} placeholder="https://your-website.com" />
                     </div>
                  </div>
 

@@ -24,13 +24,20 @@ export const Home: React.FC<HomeProps> = ({ city, onSearch, onCategorySelect, on
     dbService.getActiveBanners(city.id).then(setBanners);
   }, [city.id]);
 
+  // Record impression for the current active banner
+  useEffect(() => {
+    if (banners.length > 0 && banners[currentBannerIndex]) {
+      dbService.recordBannerView(banners[currentBannerIndex].id);
+    }
+  }, [currentBannerIndex, banners]);
+
   // Banner Auto-slider Logic
   useEffect(() => {
     if (banners.length <= 1) return;
     
     const timer = setInterval(() => {
       setCurrentBannerIndex((prev) => (prev + 1) % banners.length);
-    }, 3000); // Switch every 3 seconds
+    }, 5000); // 5 seconds rotation
 
     return () => clearInterval(timer);
   }, [banners.length]);
@@ -38,9 +45,13 @@ export const Home: React.FC<HomeProps> = ({ city, onSearch, onCategorySelect, on
   const nextBanner = () => setCurrentBannerIndex((prev) => (prev + 1) % banners.length);
   const prevBanner = () => setCurrentBannerIndex((prev) => (prev - 1 + banners.length) % banners.length);
 
+  const handleBannerClick = (id: string) => {
+    dbService.recordBannerClick(id);
+  };
+
   return (
     <div className="flex flex-col items-center px-4 pt-6 md:pt-12 pb-20 overflow-x-hidden">
-      {/* Category Quick Filters - Relocated to the top since hero is removed */}
+      {/* Category Quick Filters */}
       <div className="w-full max-w-7xl px-4 flex flex-wrap justify-center gap-2 mb-0">
         {categories.map(cat => (
           <button 
@@ -53,7 +64,7 @@ export const Home: React.FC<HomeProps> = ({ city, onSearch, onCategorySelect, on
         ))}
       </div>
 
-      {/* City-Locked Banner Carousel - Updated to 4:1 ratio */}
+      {/* City-Locked Banner Carousel */}
       {banners.length > 0 && (
         <div className="w-full max-w-7xl px-4 relative group mb-0 mt-8">
            <div 
@@ -64,6 +75,7 @@ export const Home: React.FC<HomeProps> = ({ city, onSearch, onCategorySelect, on
                 <a 
                   key={banner.id}
                   href={banner.linkUrl} 
+                  onClick={() => handleBannerClick(banner.id)}
                   target="_blank" 
                   rel="noopener noreferrer"
                   className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentBannerIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}

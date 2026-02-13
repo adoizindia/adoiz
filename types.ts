@@ -1,3 +1,4 @@
+
 export enum UserRole {
   GUEST = 'GUEST',
   USER = 'USER',
@@ -203,6 +204,8 @@ export interface BannerAd {
   status: 'PENDING' | 'LIVE' | 'REJECTED';
   createdAt: string;
   rejectionReason?: string;
+  views: number;
+  clicks: number;
 }
 
 export interface Rating {
