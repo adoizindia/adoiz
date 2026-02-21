@@ -50,9 +50,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
   // Banner Form State
   const [bannerForm, setBannerForm] = useState({
     title: '',
-    cityId: CITIES[0].id,
+    cityId: user.cityId || CITIES[0].id,
     imageUrl: '',
-    linkUrl: ''
+    linkUrl: '',
+    budget: ''
   });
 
   const config = dbService.getSystemConfig();
@@ -133,13 +134,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
     try {
       await dbService.createBannerAd({
         ...bannerForm,
+        budget: Number(bannerForm.budget),
         userId: user.id
       });
       const updatedUser = await dbService.getUserById(user.id);
       if (updatedUser && onUpdateUser) onUpdateUser(updatedUser);
       notify("Banner ad submitted for review!", "success");
       setShowBannerModal(false);
-      setBannerForm({ title: '', cityId: CITIES[0].id, imageUrl: '', linkUrl: '' });
+      setBannerForm({ title: '', cityId: user.cityId || CITIES[0].id, imageUrl: '', linkUrl: '', budget: '' });
       loadData();
     } catch (err: any) {
       notify(err.message, "error");
@@ -152,7 +154,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
 
   // Banner Pricing Calculation
   const selectedCityTier = config.cityTierMapping[bannerForm.cityId] || 'T2';
-  const bannerPrice = config.bannerAdTierPrices[selectedCityTier];
+  const cpmRate = config.bannerAdTierPrices[selectedCityTier];
+  const estimatedImpressions = bannerForm.budget ? Math.floor((Number(bannerForm.budget) / cpmRate) * 1000) : 0;
 
   return (
     <div className="max-w-7xl mx-auto px-4 py-12 pb-32">
@@ -244,13 +247,24 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     <div>
                       <h4 className="font-black text-gray-900 text-xl truncate mb-1">{b.title}</h4>
                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Target City: {CITIES.find(c => c.id === b.cityId)?.name}</p>
+                      {b.status === 'LIVE' && (
+                         <div className="mt-4 flex gap-6">
+                            <div><p className="text-2xl font-black text-blue-600">{b.views}</p><p className="text-[8px] font-bold text-gray-400 uppercase">Impressions</p></div>
+                            <div><p className="text-2xl font-black text-emerald-600">{b.clicks}</p><p className="text-[8px] font-bold text-gray-400 uppercase">Clicks</p></div>
+                            <div><p className="text-2xl font-black text-gray-900">{Math.round((b.views / (b.targetImpressions || 1)) * 100)}%</p><p className="text-[8px] font-bold text-gray-400 uppercase">Completed</p></div>
+                         </div>
+                      )}
+                      {b.status === 'PENDING' && <p className="mt-2 text-xs font-bold text-amber-600">Waiting for approval...</p>}
                     </div>
-                    <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest ${
-                      b.status === 'LIVE' ? 'bg-emerald-50 text-emerald-600' : 
-                      b.status === 'REJECTED' ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'
-                    }`}>
-                      {b.status}
-                    </span>
+                    <div className="text-right">
+                       <span className={`px-4 py-1.5 rounded-xl text-[9px] font-black uppercase tracking-widest ${
+                         b.status === 'LIVE' ? 'bg-emerald-50 text-emerald-600' : 
+                         b.status === 'REJECTED' ? 'bg-rose-50 text-rose-600' : 'bg-amber-50 text-amber-600'
+                       }`}>
+                         {b.status}
+                       </span>
+                       <p className="mt-2 text-[9px] font-black text-gray-400 uppercase">Budget: ₹{b.budget}</p>
+                    </div>
                   </div>
                 </div>
               ))}
@@ -436,8 +450,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
                        <input required type="text" className="w-full bg-gray-50 border border-gray-200 p-4 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all" value={bannerForm.title} onChange={e => setBannerForm({...bannerForm, title: e.target.value})} placeholder="e.g. 50% Off Sale" />
                     </div>
                     <div>
-                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Target City</label>
-                       <select className="w-full bg-gray-50 border border-gray-200 p-4 rounded-2xl font-bold outline-none appearance-none" value={bannerForm.cityId} onChange={e => setBannerForm({...bannerForm, cityId: e.target.value})}>
+                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Target City (Fixed)</label>
+                       <select disabled className="w-full bg-gray-100 border border-gray-200 p-4 rounded-2xl font-bold outline-none appearance-none text-gray-500 cursor-not-allowed" value={bannerForm.cityId} onChange={e => setBannerForm({...bannerForm, cityId: e.target.value})}>
                           {CITIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                        </select>
                     </div>
@@ -472,12 +486,22 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </div>
                  </div>
 
-                 <div className="bg-blue-50 p-5 rounded-2xl border border-blue-100 flex items-center justify-between">
+                 <div className="space-y-4">
                     <div>
-                       <p className="text-[10px] font-black text-blue-900 uppercase">Banner Rate (7 Days)</p>
-                       <p className="text-xs text-blue-600 font-bold">City Tier: {selectedCityTier}</p>
+                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Campaign Budget (₹)</label>
+                       <input required type="number" className="w-full bg-gray-50 border border-gray-200 p-4 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all" value={bannerForm.budget} onChange={e => setBannerForm({...bannerForm, budget: e.target.value})} placeholder="Enter amount" />
                     </div>
-                    <p className="text-2xl font-black text-blue-600">₹{bannerPrice}</p>
+                    
+                    <div className="bg-blue-50 p-5 rounded-2xl border border-blue-100 flex items-center justify-between">
+                       <div>
+                          <p className="text-[10px] font-black text-blue-900 uppercase">Estimated Reach</p>
+                          <p className="text-xs text-blue-600 font-bold">CPM Rate: ₹{cpmRate}/1k ({selectedCityTier})</p>
+                       </div>
+                       <div className="text-right">
+                          <p className="text-2xl font-black text-blue-600">~{estimatedImpressions.toLocaleString()}</p>
+                          <p className="text-[8px] font-bold text-blue-400 uppercase">Impressions</p>
+                       </div>
+                    </div>
                  </div>
 
                  <button disabled={isProcessing === 'banner'} type="submit" className="w-full bg-blue-600 text-white py-5 rounded-2xl font-black uppercase text-xs tracking-widest shadow-xl shadow-blue-200 hover:bg-blue-700 transition-all active:scale-95 disabled:opacity-50">

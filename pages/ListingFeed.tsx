@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect, useMemo } from 'react';
 import { dbService } from '../services/dbService';
 import { Listing, City, Category } from '../types';
@@ -61,7 +62,26 @@ export const ListingFeed: React.FC<ListingFeedProps> = ({
   return (
     <div className="max-w-7xl mx-auto px-4 py-6 pb-24">
       <div className="flex flex-col gap-6 mb-8 bg-white p-5 md:p-8 rounded-[2.5rem] border border-gray-100 shadow-sm animate-in slide-in-from-top-4">
-        {/* Sort and Title Row Removed as requested */}
+        
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-6">
+          <div className="flex items-center gap-3">
+             <div className="w-12 h-12 bg-blue-50 text-blue-600 rounded-2xl flex items-center justify-center"><i className="fas fa-list-ul"></i></div>
+             <div>
+                <h1 className="text-xl md:text-2xl font-black text-gray-900 tracking-tight leading-none">{category === 'All' ? 'Latest Listings' : category}</h1>
+                <p className="text-[10px] font-black uppercase text-gray-400 tracking-widest mt-2">Browsing {city.name}</p>
+             </div>
+          </div>
+          
+          <div className="flex items-center gap-3">
+            <label className="hidden md:block text-[9px] font-black uppercase text-gray-400 tracking-widest">Sort By</label>
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as SortOption)} className="bg-gray-50 border border-gray-100 rounded-xl px-4 py-2 text-[10px] font-black uppercase outline-none focus:ring-2 focus:ring-blue-100 transition-all">
+               <option value="newest">Newest First</option>
+               <option value="oldest">Oldest First</option>
+               <option value="price_low">Price: Low to High</option>
+               <option value="price_high">Price: High to Low</option>
+            </select>
+          </div>
+        </div>
         
         <div className="flex items-center space-x-2 overflow-x-auto hide-scrollbar pb-1">
           <button onClick={() => onCategoryChange('All')} className={`flex-shrink-0 px-6 py-3 rounded-full text-[11px] font-bold uppercase tracking-widest transition-all border ${category === 'All' ? 'bg-[#1a73e8] text-white border-[#1a73e8] shadow-lg shadow-blue-100' : 'bg-white text-gray-500 border-gray-100 hover:border-gray-300'}`}>

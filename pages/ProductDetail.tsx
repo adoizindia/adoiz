@@ -360,7 +360,8 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
                 <h3 className="text-2xl font-black">Report Ad</h3>
                 <p className="text-rose-100 text-xs mt-1">Help us keep adoiz safe</p>
               </div>
-              <form handleReportSubmit={handleReportSubmit} className="p-10 space-y-6">
+              {/* Fixed: Replaced incorrect handleReportSubmit prop with onSubmit */}
+              <form onSubmit={handleReportSubmit} className="p-10 space-y-6">
                  <div className="space-y-1">
                     <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest">Reason for Reporting</label>
                     <select required className="w-full bg-gray-50 border border-gray-100 p-4 rounded-xl font-bold text-sm outline-none focus:bg-white transition-all" value={reportForm.reason} onChange={e => setReportForm({...reportForm, reason: e.target.value as AdReport['reason']})}>

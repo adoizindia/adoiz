@@ -64,6 +64,30 @@ export const ADDITIONAL_MOCK_USERS: User[] = [
     whatsapp: '+91 7766554433',
     photo: 'https://picsum.photos/seed/u5/200',
     walletBalance: 1500
+  },
+  {
+    id: 'u6',
+    email: 'pune_furniture@test.com',
+    name: 'Suresh Patil',
+    role: UserRole.USER,
+    cityId: 'c2',
+    stateId: 'st1',
+    mobile: '+91 6655443322',
+    whatsapp: '+91 6655443322',
+    photo: 'https://picsum.photos/seed/u6/200',
+    walletBalance: 800
+  },
+  {
+    id: 'u7',
+    email: 'delhi_electronics@test.com',
+    name: 'Amit Verma',
+    role: UserRole.USER,
+    cityId: 'c4',
+    stateId: 'st3',
+    mobile: '+91 5544332211',
+    whatsapp: '+91 5544332211',
+    photo: 'https://picsum.photos/seed/u7/200',
+    walletBalance: 3000
   }
 ];
 
@@ -139,6 +163,34 @@ export const MOCK_LISTINGS: Listing[] = [
     createdAt: '2023-10-10T11:00:00Z',
     views: 95
   },
+  {
+    id: 'l21',
+    sellerId: 'u2',
+    cityId: 'c1',
+    title: 'Commercial Office Space in Andheri',
+    description: '1000 sq ft furnished office, near metro station.',
+    price: 25000000,
+    category: 'Properties',
+    images: ['https://picsum.photos/seed/l21/600/400'],
+    status: ListingStatus.APPROVED,
+    isPremium: true,
+    createdAt: '2023-11-10T09:00:00Z',
+    views: 320
+  },
+  {
+    id: 'l22',
+    sellerId: 'u5',
+    cityId: 'c1',
+    title: 'Royal Enfield Classic 350',
+    description: 'Gunmetal Grey, 2022 model, excellent condition.',
+    price: 180000,
+    category: 'Cars',
+    images: ['https://picsum.photos/seed/l22/600/400'],
+    status: ListingStatus.APPROVED,
+    isPremium: false,
+    createdAt: '2023-11-12T11:30:00Z',
+    views: 150
+  },
 
   // PUNE (c2) - 5 Listings
   {
@@ -210,6 +262,20 @@ export const MOCK_LISTINGS: Listing[] = [
     isPremium: false,
     createdAt: '2023-10-22T14:00:00Z',
     views: 180
+  },
+  {
+    id: 'l23',
+    sellerId: 'u6',
+    cityId: 'c2',
+    title: 'L-Shaped Sofa Set',
+    description: 'Grey fabric, 5 seater, very comfortable.',
+    price: 35000,
+    category: 'Furniture',
+    images: ['https://picsum.photos/seed/l23/600/400'],
+    status: ListingStatus.APPROVED,
+    isPremium: false,
+    createdAt: '2023-11-15T14:00:00Z',
+    views: 90
   },
 
   // BANGALORE (c3) - 5 Listings
@@ -283,6 +349,20 @@ export const MOCK_LISTINGS: Listing[] = [
     createdAt: '2023-10-29T17:00:00Z',
     views: 88
   },
+  {
+    id: 'l24',
+    sellerId: 'u2',
+    cityId: 'c3',
+    title: 'Office Chair Ergonomic',
+    description: 'High back, mesh support, adjustable height.',
+    price: 8000,
+    category: 'Furniture',
+    images: ['https://picsum.photos/seed/l24/600/400'],
+    status: ListingStatus.APPROVED,
+    isPremium: false,
+    createdAt: '2023-11-18T10:00:00Z',
+    views: 75
+  },
 
   // NEW DELHI (c4) - 5 Listings
   {
@@ -355,6 +435,20 @@ export const MOCK_LISTINGS: Listing[] = [
     createdAt: '2023-11-05T16:00:00Z',
     views: 112
   },
+  {
+    id: 'l25',
+    sellerId: 'u7',
+    cityId: 'c4',
+    title: 'OnePlus 11 5G',
+    description: '16GB RAM, 256GB Storage, Titan Black.',
+    price: 56000,
+    category: 'Electronics',
+    images: ['https://picsum.photos/seed/l25/600/400'],
+    status: ListingStatus.APPROVED,
+    isPremium: false,
+    createdAt: '2023-11-20T13:00:00Z',
+    views: 190
+  },
 
   // Extra Pending Items for Moderation Testing
   {
@@ -366,6 +460,20 @@ export const MOCK_LISTINGS: Listing[] = [
     price: 82000,
     category: 'Electronics',
     images: ['https://picsum.photos/seed/p1/600/400'],
+    status: ListingStatus.PENDING,
+    isPremium: false,
+    createdAt: new Date().toISOString(),
+    views: 0
+  },
+  {
+    id: 'p2',
+    sellerId: 'u6',
+    cityId: 'c2',
+    title: 'Study Table - Pending Review',
+    description: 'Wooden study table with drawers.',
+    price: 4500,
+    category: 'Furniture',
+    images: ['https://picsum.photos/seed/p2/600/400'],
     status: ListingStatus.PENDING,
     isPremium: false,
     createdAt: new Date().toISOString(),

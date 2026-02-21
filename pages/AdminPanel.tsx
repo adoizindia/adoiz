@@ -1434,32 +1434,27 @@ export const AdminPanel: React.FC<{
       return (
         <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
            <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-8">
-              <h3 className="text-xl font-black uppercase text-gray-900 tracking-tight">Banner Ad Pricing</h3>
+              <h3 className="text-xl font-black uppercase text-gray-900 tracking-tight">Banner Ad CPM Pricing (Per 1000 Impressions)</h3>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
                  <div className="space-y-2">
-                   <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Tier 1 Cities (Metro) (₹)</label>
+                   <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Tier 1 CPM Rate (₹)</label>
                    <input type="number" className="w-full bg-gray-50 border p-5 rounded-2xl font-bold" 
                      value={config.bannerAdTierPrices.T1} 
                      onChange={e => setConfig({...config, bannerAdTierPrices: {...config.bannerAdTierPrices, T1: Number(e.target.value)}})} />
                  </div>
                  <div className="space-y-2">
-                   <label className="text-[10px) font-black uppercase text-gray-400 ml-1">Tier 2 Cities (Standard) (₹)</label>
+                   <label className="text-[10px) font-black uppercase text-gray-400 ml-1">Tier 2 CPM Rate (₹)</label>
                    <input type="number" className="w-full bg-gray-50 border p-5 rounded-2xl font-bold" 
                      value={config.bannerAdTierPrices.T2} 
                      onChange={e => setConfig({...config, bannerAdTierPrices: {...config.bannerAdTierPrices, T2: Number(e.target.value)}})} />
                  </div>
                  <div className="space-y-2">
-                   <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Tier 3 Cities (Small) (₹)</label>
+                   <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Tier 3 CPM Rate (₹)</label>
                    <input type="number" className="w-full bg-gray-50 border p-5 rounded-2xl font-bold" 
                      value={config.bannerAdTierPrices.T3} 
                      onChange={e => setConfig({...config, bannerAdTierPrices: {...config.bannerAdTierPrices, T3: Number(e.target.value)}})} />
                  </div>
-                 <div className="space-y-2">
-                   <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Banner Duration (Days)</label>
-                   <input type="number" className="w-full bg-gray-50 border p-5 rounded-2xl font-bold" 
-                     value={config.bannerAdDurationDays} 
-                     onChange={e => setConfig({...config, bannerAdDurationDays: Number(e.target.value)})} />
-                 </div>
+
               </div>
               <div className="pt-4">
                  <button onClick={handleConfigCommit} disabled={isProcessing} className="bg-slate-900 text-white px-10 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest hover:bg-black transition-all">Save Banner Policy</button>

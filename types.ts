@@ -68,12 +68,10 @@ export interface SystemConfig {
   blueTickPrice: number;
   blueTickDurationDays: number;
   blueTickEnabled: boolean;
-  bannerAdPrice: number;
-  bannerAdDurationDays: number;
   bannerAdTierPrices: {
-    T1: number;
-    T2: number;
-    T3: number;
+    T1: number; // CPM Rate for Tier 1
+    T2: number; // CPM Rate for Tier 2
+    T3: number; // CPM Rate for Tier 3
   };
   googleAdsenseCode: string;
   cityTierMapping: Record<string, 'T1' | 'T2' | 'T3'>;
@@ -201,11 +199,14 @@ export interface BannerAd {
   title: string;
   imageUrl: string;
   linkUrl: string;
-  status: 'PENDING' | 'LIVE' | 'REJECTED';
+  status: 'PENDING' | 'LIVE' | 'REJECTED' | 'COMPLETED' | 'PAUSED';
   createdAt: string;
   rejectionReason?: string;
-  views: number;
+  views: number; // Current Impressions
   clicks: number;
+  budget: number;
+  cpmRate: number;
+  targetImpressions: number;
 }
 
 export interface Rating {
