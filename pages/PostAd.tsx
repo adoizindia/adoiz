@@ -27,7 +27,7 @@ export const PostAd: React.FC<PostAdProps> = ({ user, city, editListing, onSucce
     title: '',
     price: '',
     category: '',
-    productType: 'Universal' as 'New' | 'Used' | 'Universal',
+    productType: 'N/A' as 'New' | 'Used' | 'N/A',
     description: '',
     isPremium: false,
     images: [] as string[]
@@ -48,7 +48,7 @@ export const PostAd: React.FC<PostAdProps> = ({ user, city, editListing, onSucce
         title: editListing.title,
         price: editListing.price.toString(),
         category: editListing.category,
-        productType: editListing.productType || 'Universal',
+        productType: editListing.productType || 'N/A',
         description: editListing.description,
         isPremium: editListing.isPremium,
         images: editListing.images
@@ -189,15 +189,15 @@ export const PostAd: React.FC<PostAdProps> = ({ user, city, editListing, onSucce
             <div><label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Price (₹)</label><input required type="number" className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-6 py-4 outline-none font-medium" value={formData.price} onChange={e => setFormData({...formData, price: e.target.value})} /></div>
             <div><label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Category</label><select className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-6 py-4 outline-none font-medium" value={formData.category} onChange={e => setFormData({...formData, category: e.target.value})}>{categories.map(cat => <option key={cat.id} value={cat.name}>{cat.name}</option>)}</select></div>
             <div>
-              <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Product Type</label>
+              <label className="block text-xs font-black text-gray-400 uppercase tracking-widest mb-3">Product Condition</label>
               <select 
                 className="w-full bg-gray-50 border border-gray-200 rounded-2xl px-6 py-4 outline-none font-medium" 
                 value={formData.productType} 
-                onChange={e => setFormData({...formData, productType: e.target.value as 'New' | 'Used' | 'Universal'})}
+                onChange={e => setFormData({...formData, productType: e.target.value as 'New' | 'Used' | 'N/A'})}
               >
                 <option value="New">New</option>
                 <option value="Used">Used</option>
-                <option value="Universal">Universal</option>
+                <option value="N/A">N/A</option>
               </select>
             </div>
           </div>

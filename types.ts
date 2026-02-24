@@ -130,9 +130,20 @@ export interface SystemConfig {
     razorpay: { active: boolean; keyId: string; keySecret: string; };
     upiId: string;
   };
+  referral: {
+    enabled: boolean;
+    welcomeBonus: number;
+    referrerBonus: number;
+  };
 }
 
-export interface Country { id: string; name: string; code: string; isActive?: boolean; createdAt?: string; }
+export interface Country {
+  id: string;
+  name: string;
+  code: string;
+  isActive?: boolean;
+}
+
 export interface State { id: string; name: string; countryId: string; isActive?: boolean; }
 export interface City { id: string; name: string; stateId: string; isActive?: boolean; }
 
@@ -158,6 +169,9 @@ export interface User {
   socialProvider?: 'email' | 'google' | 'facebook';
   averageRating?: number;
   ratingCount?: number;
+  referralCode?: string;
+  referredBy?: string;
+  isVacationMode?: boolean;
 }
 
 export interface Listing {
@@ -168,7 +182,7 @@ export interface Listing {
   description: string;
   price: number;
   category: string;
-  productType?: 'New' | 'Used' | 'Universal';
+  productType?: 'New' | 'Used' | 'N/A';
   images: string[];
   status: ListingStatus;
   isPremium: boolean;

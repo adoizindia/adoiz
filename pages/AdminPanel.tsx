@@ -414,6 +414,7 @@ export const AdminPanel: React.FC<{
       case 'REVENUE': return [
         { id: 'pricing', label: 'Ad Pricing' }, 
         { id: 'subscribe', label: 'Plans' },
+        { id: 'referral', label: 'Referral Program' },
         { id: 'banner_ads', label: 'Banners' },
         { id: 'adsense', label: 'External Ads' },
         { id: 'gateways', label: 'Gateways' }
@@ -1377,6 +1378,7 @@ export const AdminPanel: React.FC<{
              <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-8">
                 <h3 className="text-xl font-black uppercase text-gray-900 tracking-tight">Ad Listing Rates</h3>
                 <div className="grid grid-cols-2 gap-8">
+                   <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400 ml-1">Standard Ad Price (₹)</label><input type="number" className="w-full bg-gray-50 border p-5 rounded-2xl font-bold" value={config.standardAdPrice} onChange={e => setConfig({...config, standardAdPrice: Number(e.target.value)})} /></div>
                    <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400 ml-1">Premium Ad Price (₹)</label><input type="number" className="w-full bg-gray-50 border p-5 rounded-2xl font-bold" value={config.premiumPrice} onChange={e => setConfig({...config, premiumPrice: Number(e.target.value)})} /></div>
                    <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400 ml-1">Free Ad Limit</label><input type="number" className="w-full bg-gray-50 border p-5 rounded-2xl font-bold" value={config.freeAdLimit} onChange={e => setConfig({...config, freeAdLimit: Number(e.target.value)})} /></div>
                    <div className="space-y-2"><label className="text-[10px] font-black uppercase text-gray-400 ml-1">Blue Tick Verification (₹)</label><input type="number" className="w-full bg-gray-50 border p-5 rounded-2xl font-bold" value={config.blueTickPrice} onChange={e => setConfig({...config, blueTickPrice: Number(e.target.value)})} /></div>
@@ -1426,6 +1428,56 @@ export const AdminPanel: React.FC<{
                  <button onClick={handleAddPlan} className="w-full bg-blue-600 text-white py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest shadow-xl shadow-blue-200">Save Plan</button>
               </div>
               <div className="mt-8 text-right"><button onClick={handleConfigCommit} disabled={isProcessing} className="bg-slate-900 text-white px-10 py-4 rounded-2xl font-black uppercase text-[10px] tracking-widest">Apply All Changes</button></div>
+           </div>
+        </div>
+      );
+    }
+    if (activeTab === 'referral') {
+      return (
+        <div className="max-w-4xl space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
+           <div className="bg-white p-10 rounded-[3rem] border border-gray-100 shadow-sm space-y-8">
+              <div className="flex items-center justify-between">
+                 <div className="flex items-center gap-6">
+                    <div className="w-16 h-16 bg-purple-600 text-white rounded-2xl flex items-center justify-center text-2xl shadow-lg shadow-purple-200">
+                       <i className="fas fa-users-viewfinder"></i>
+                    </div>
+                    <div>
+                       <h3 className="text-xl font-black uppercase text-gray-900 tracking-tight">Referral Program</h3>
+                       <p className="text-[10px] font-black text-gray-400 uppercase tracking-widest mt-1">Grow your user base with rewards</p>
+                    </div>
+                 </div>
+                 <button 
+                   onClick={() => setConfig({...config, referral: {...config.referral, enabled: !config.referral.enabled}})}
+                   className={`w-16 h-8 rounded-full transition-all relative ${config.referral.enabled ? 'bg-emerald-500' : 'bg-gray-300'}`}
+                 >
+                   <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all ${config.referral.enabled ? 'left-9' : 'left-1'}`}></div>
+                 </button>
+              </div>
+
+              <div className={`grid grid-cols-2 gap-8 transition-all ${config.referral.enabled ? 'opacity-100' : 'opacity-50 pointer-events-none'}`}>
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-gray-400 ml-1">New User Welcome Bonus (₹)</label>
+                    <input 
+                      type="number" 
+                      className="w-full bg-gray-50 border border-gray-100 p-5 rounded-2xl font-bold outline-none focus:bg-white focus:border-purple-500 transition-all" 
+                      value={config.referral.welcomeBonus} 
+                      onChange={e => setConfig({...config, referral: {...config.referral, welcomeBonus: Number(e.target.value)}})} 
+                    />
+                 </div>
+                 <div className="space-y-2">
+                    <label className="text-[10px] font-black uppercase text-gray-400 ml-1">Referrer Reward (₹)</label>
+                    <input 
+                      type="number" 
+                      className="w-full bg-gray-50 border border-gray-100 p-5 rounded-2xl font-bold outline-none focus:bg-white focus:border-purple-500 transition-all" 
+                      value={config.referral.referrerBonus} 
+                      onChange={e => setConfig({...config, referral: {...config.referral, referrerBonus: Number(e.target.value)}})} 
+                    />
+                 </div>
+              </div>
+
+              <div className="pt-6 border-t border-gray-50">
+                 <button onClick={handleConfigCommit} disabled={isProcessing} className="w-full bg-slate-900 text-white py-5 rounded-2xl font-black uppercase text-xs tracking-widest hover:bg-black transition-all shadow-xl">Save Referral Settings</button>
+              </div>
            </div>
         </div>
       );

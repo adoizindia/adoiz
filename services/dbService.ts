@@ -12,7 +12,12 @@ const API_BASE_URL = 'http://localhost:5000/api';
 
 class DbService {
   // In-memory store for mock data persistence
-  private _users: User[] = [MOCK_USER, ...ADDITIONAL_MOCK_USERS];
+  private _users: User[] = [
+    MOCK_USER, 
+    ...ADDITIONAL_MOCK_USERS,
+    { ...MOCK_USER, id: 'admin-master', role: UserRole.ADMIN, name: 'System Admin', email: 'admin@adoiz.com', walletBalance: 50000 },
+    { ...MOCK_USER, id: 'mod-mumbai', role: UserRole.MODERATOR, name: 'Mumbai Moderator', email: 'mod@adoiz.com', managedCityIds: ['c1'], walletBalance: 50000 }
+  ];
   private _listings: Listing[] = [...MOCK_LISTINGS];
   private _banners: BannerAd[] = [];
   private _chats: Chat[] = [];
@@ -52,7 +57,29 @@ class DbService {
   // --- System Config ---
   getSystemConfig(): SystemConfig {
     const saved = localStorage.getItem('adoiz_config');
-    return saved ? JSON.parse(saved) : this.getDefaultConfig();
+    const defaultConfig = this.getDefaultConfig();
+    
+    if (saved) {
+      try {
+        const parsed = JSON.parse(saved);
+        // Deep merge critical nested objects to prevent crashes on new fields
+        return {
+          ...defaultConfig,
+          ...parsed,
+          referral: { ...defaultConfig.referral, ...(parsed.referral || {}) },
+          paymentGateway: { ...defaultConfig.paymentGateway, ...(parsed.paymentGateway || {}) },
+          branding: { ...defaultConfig.branding, ...(parsed.branding || {}) },
+          socialLogin: { ...defaultConfig.socialLogin, ...(parsed.socialLogin || {}) },
+          otpConfig: { ...defaultConfig.otpConfig, ...(parsed.otpConfig || {}) },
+          bannerAdTierPrices: { ...defaultConfig.bannerAdTierPrices, ...(parsed.bannerAdTierPrices || {}) },
+          featureToggles: { ...defaultConfig.featureToggles, ...(parsed.featureToggles || {}) },
+        };
+      } catch (e) {
+        console.error("Failed to parse saved config, resetting to default", e);
+        return defaultConfig;
+      }
+    }
+    return defaultConfig;
   }
 
   private getDefaultConfig(): SystemConfig {
@@ -95,7 +122,8 @@ class DbService {
         email: { enabled: false, smtpHost: '', smtpPort: 587, smtpUser: '', smtpPass: '', smtpSecure: true },
         sms: { enabled: false, provider: 'MSG91', apiKey: '', senderId: '' }
       },
-      paymentGateway: { razorpay: { active: true, keyId: '', keySecret: '' }, upiId: 'adoiz@upi' }
+      paymentGateway: { razorpay: { active: true, keyId: '', keySecret: '' }, upiId: 'adoiz@upi' },
+      referral: { enabled: false, welcomeBonus: 100, referrerBonus: 50 }
     };
   }
 
@@ -143,13 +171,106 @@ class DbService {
     return this.request(`/users/${id}`, {}, user || MOCK_USER);
   }
 
-  async registerUser(u: Partial<User>): Promise<User> {
-    const newUser = { ...MOCK_USER, ...u, id: `u-${Date.now()}` } as User;
+  async registerUser(u: Partial<User> & { referralCode?: string }): Promise<User> {
+    const config = this.getSystemConfig();
+    const newUserId = `u-${Date.now()}`;
+    
+    // Generate a unique referral code for the new user
+    const myReferralCode = (u.name?.substring(0, 3).toUpperCase() || 'USR') + Math.floor(1000 + Math.random() * 9000);
+
+    let walletBalance = u.walletBalance || 0;
+    let referredBy = undefined;
+
+    // Handle Referral Logic
+    if (config.referral.enabled && u.referralCode) {
+      const referrer = this._users.find(user => user.referralCode === u.referralCode || user.id === u.referralCode); // Allow ID as code fallback
+      if (referrer) {
+        referredBy = referrer.id;
+        
+        // 1. Bonus for New User
+        walletBalance += config.referral.welcomeBonus;
+        this._transactions.push({
+          id: `txn-ref-welcome-${Date.now()}`,
+          userId: newUserId,
+          amount: config.referral.welcomeBonus,
+          type: 'CREDIT',
+          description: `Welcome Bonus (Referred by ${referrer.name})`,
+          timestamp: new Date().toISOString()
+        });
+
+        // 2. Bonus for Referrer
+        referrer.walletBalance += config.referral.referrerBonus;
+        this._transactions.push({
+          id: `txn-ref-bonus-${Date.now()}`,
+          userId: referrer.id,
+          amount: config.referral.referrerBonus,
+          type: 'CREDIT',
+          description: `Referral Bonus (User: ${u.name})`,
+          timestamp: new Date().toISOString()
+        });
+        
+        // Update referrer in mock store (in real app, this would be a DB update)
+        // We don't need to explicitly save 'referrer' here because we modified the object reference in _users array directly if it exists there.
+        // However, if _users is just a cache, we should ensure persistence. In this mock, _users IS the persistence.
+      }
+    }
+
+    const newUser = { 
+      ...MOCK_USER, 
+      ...u, 
+      id: newUserId,
+      walletBalance,
+      referralCode: myReferralCode,
+      referredBy
+    } as User;
+    
     this._users.push(newUser);
-    return this.request('/auth/register', { method: 'POST', body: JSON.stringify(u) }, newUser);
+    return this.request('/auth/register', { method: 'POST', body: JSON.stringify({ ...u, referralCode: undefined }) }, newUser);
   }
 
   async adminUpdateUser(id: string, data: Partial<User>, adminId: string): Promise<User | null> {
+    const userIndex = this._users.findIndex(u => u.id === id);
+    if (userIndex >= 0) {
+      // Apply updates
+      this._users[userIndex] = { ...this._users[userIndex], ...data };
+      
+      // Handle Suspension Logic
+      if (data.isSuspended === true) {
+        // 1. Disable all APPROVED listings
+        this._listings.forEach(l => {
+          if (l.sellerId === id && l.status === ListingStatus.APPROVED) {
+            l.status = ListingStatus.DISABLED;
+          }
+        });
+
+        // 2. Pause all LIVE banners
+        this._banners.forEach(b => {
+          if (b.userId === id && b.status === 'LIVE') {
+            b.status = 'PAUSED';
+          }
+        });
+
+      } else if (data.isSuspended === false) {
+        // Handle Activation Logic
+        
+        // 1. Re-activate DISABLED listings (that were previously approved)
+        // Note: In a real DB we might store 'previousStatus', here we assume DISABLED meant APPROVED before suspension
+        this._listings.forEach(l => {
+          if (l.sellerId === id && l.status === ListingStatus.DISABLED) {
+            l.status = ListingStatus.APPROVED;
+          }
+        });
+
+        // 2. Resume PAUSED banners
+        this._banners.forEach(b => {
+          if (b.userId === id && b.status === 'PAUSED') {
+            b.status = 'LIVE';
+          }
+        });
+      }
+
+      return this.request(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }, this._users[userIndex]);
+    }
     return this.request(`/admin/users/${id}`, { method: 'PATCH', body: JSON.stringify(data) }, { ...MOCK_USER, ...data } as User);
   }
 
@@ -179,7 +300,44 @@ class DbService {
   }
 
   async subscribeUser(userId: string, planId: string): Promise<User | null> {
-    return this.request('/subscriptions/activate', { method: 'POST', body: JSON.stringify({ planId }) }, MOCK_USER);
+    const userIndex = this._users.findIndex(u => u.id === userId);
+    if (userIndex === -1) throw new Error("User not found");
+
+    const config = this.getSystemConfig();
+    const plan = config.subscriptionPlans.find(p => p.id === planId);
+    if (!plan) throw new Error("Invalid plan");
+
+    const user = this._users[userIndex];
+    if (user.walletBalance < plan.price) {
+      throw new Error("Insufficient wallet balance. Please recharge.");
+    }
+
+    // Deduct Balance
+    user.walletBalance -= plan.price;
+
+    // Update Subscription
+    const now = new Date();
+    const expiresAt = new Date(now.getTime() + plan.durationDays * 24 * 60 * 60 * 1000);
+    
+    user.subscription = {
+      planId: plan.id,
+      planName: plan.name,
+      activatedAt: now.toISOString(),
+      expiresAt: expiresAt.toISOString(),
+      status: 'ACTIVE'
+    };
+
+    // Record Transaction
+    this._transactions.push({
+      id: `txn-${Date.now()}`,
+      userId,
+      amount: plan.price,
+      type: 'DEBIT',
+      description: `Subscription: ${plan.name}`,
+      timestamp: now.toISOString()
+    });
+
+    return this.request('/subscriptions/activate', { method: 'POST', body: JSON.stringify({ planId }) }, user);
   }
 
   async adminAdjustWallet(userId: string, amount: number, type: 'CREDIT' | 'DEBIT', reason: string, adminId: string): Promise<User> {
@@ -212,12 +370,21 @@ class DbService {
   }
 
   // --- Listings ---
-  async getListingsByCity(cityId: string, searchQuery: string = '', category: string = 'All'): Promise<Listing[]> {
-    let fallback = this._listings.filter(l => l.cityId === cityId && l.status === ListingStatus.APPROVED);
+  async getListingsByCity(cityId: string, searchQuery: string = '', category: string = 'All', productType: string = 'All'): Promise<Listing[]> {
+    // Filter out sellers who are on vacation
+    const vacationUserIds = this._users.filter(u => u.isVacationMode).map(u => u.id);
+    
+    let fallback = this._listings.filter(l => 
+      l.cityId === cityId && 
+      l.status === ListingStatus.APPROVED &&
+      !vacationUserIds.includes(l.sellerId)
+    );
+    
     if (category !== 'All') fallback = fallback.filter(l => l.category === category);
+    if (productType !== 'All') fallback = fallback.filter(l => l.productType === productType);
     if (searchQuery) fallback = fallback.filter(l => l.title.toLowerCase().includes(searchQuery.toLowerCase()));
     
-    return this.request(`/listings?cityId=${cityId}&search=${searchQuery}&category=${category}`, {}, fallback);
+    return this.request(`/listings?cityId=${cityId}&search=${searchQuery}&category=${category}&productType=${productType}`, {}, fallback);
   }
 
   async getListingsBySeller(sellerId: string): Promise<Listing[]> {
@@ -244,6 +411,37 @@ class DbService {
   }
 
   async upgradeListingToPremium(listingId: string, userId: string): Promise<void> {
+    const userIndex = this._users.findIndex(u => u.id === userId);
+    if (userIndex === -1) throw new Error("User not found");
+
+    const listingIndex = this._listings.findIndex(l => l.id === listingId);
+    if (listingIndex === -1) throw new Error("Listing not found");
+
+    const config = this.getSystemConfig();
+    const price = config.premiumPrice; // Default premium boost price
+
+    const user = this._users[userIndex];
+    if (user.walletBalance < price) {
+      throw new Error("Insufficient wallet balance. Please recharge.");
+    }
+
+    // Deduct Balance
+    user.walletBalance -= price;
+
+    // Update Listing
+    this._listings[listingIndex].isPremium = true;
+    this._listings[listingIndex].premiumFrom = new Date().toISOString();
+    
+    // Record Transaction
+    this._transactions.push({
+      id: `txn-${Date.now()}`,
+      userId,
+      amount: price,
+      type: 'DEBIT',
+      description: `Premium Boost: ${this._listings[listingIndex].title}`,
+      timestamp: new Date().toISOString()
+    });
+
     return this.request(`/listings/${listingId}/boost`, { method: 'POST' }, undefined);
   }
 
@@ -258,20 +456,24 @@ class DbService {
 
   // --- Banners ---
   async getActiveBanners(cityId: string): Promise<BannerAd[]> {
-    const fallback = [
-      { 
-        id: 'b1', userId: 'u1', cityId, title: 'Summer Sale', imageUrl: 'https://picsum.photos/seed/ads1/1600/400', linkUrl: '#', 
-        status: 'LIVE', createdAt: new Date().toISOString(), views: 1500, clicks: 120,
-        budget: 5000, cpmRate: 200, targetImpressions: 25000
-      }
-    ] as BannerAd[];
+    const activeBanners = this._banners.filter(b => 
+      b.cityId === cityId && 
+      b.status === 'LIVE' && 
+      b.views < (b.targetImpressions || Infinity)
+    );
     
-    // In a real backend, this filtering happens on the server
-    // Here we simulate: Filter by City, Status=LIVE, and Views < Target
-    // Also, we should ideally increment views here or in the component. 
-    // The component calls recordBannerView, so we just return eligible ads.
-    
-    return this.request(`/banners?cityId=${cityId}`, {}, fallback);
+    // If no active banners in memory, fallback to mock if empty (though _banners starts empty, we might want to keep the mock one for demo)
+    if (activeBanners.length === 0 && this._banners.length === 0) {
+       return this.request(`/banners?cityId=${cityId}`, {}, [
+        { 
+          id: 'b1', userId: 'u1', cityId, title: 'Summer Sale', imageUrl: 'https://picsum.photos/seed/ads1/1600/400', linkUrl: '#', 
+          status: 'LIVE', createdAt: new Date().toISOString(), views: 1500, clicks: 120,
+          budget: 5000, cpmRate: 200, targetImpressions: 25000
+        }
+       ] as BannerAd[]);
+    }
+
+    return this.request(`/banners?cityId=${cityId}`, {}, activeBanners);
   }
 
   async getUserBanners(userId: string): Promise<BannerAd[]> {
@@ -340,10 +542,22 @@ class DbService {
   }
 
   async recordBannerView(id: string): Promise<void> {
+    const banner = this._banners.find(b => b.id === id);
+    if (banner) {
+      banner.views += 1;
+      // Auto-complete if target reached
+      if (banner.targetImpressions && banner.views >= banner.targetImpressions) {
+        banner.status = 'COMPLETED';
+      }
+    }
     return this.request(`/banners/${id}/view`, { method: 'POST' }, undefined);
   }
 
   async recordBannerClick(id: string): Promise<void> {
+    const banner = this._banners.find(b => b.id === id);
+    if (banner) {
+      banner.clicks += 1;
+    }
     return this.request(`/banners/${id}/click`, { method: 'POST' }, undefined);
   }
 

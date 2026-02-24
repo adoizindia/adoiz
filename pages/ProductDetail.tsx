@@ -47,6 +47,7 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
   const [ratingScore, setRatingScore] = useState(5);
   const [ratingComment, setRatingComment] = useState('');
   const [isSubmittingRating, setIsSubmittingRating] = useState(false);
+  const [isFeedbackExpanded, setIsFeedbackExpanded] = useState(false);
 
   useEffect(() => {
     dbService.getListingsByCity(listing.cityId).then(all => {
@@ -60,16 +61,27 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
     setCurrentBannerIndex(0);
   }, [listing.id, listing.cityId, seller.id]);
 
+  // Random Banner Logic
   useEffect(() => {
-    if (banners.length <= 1) return;
-    const timer = setInterval(() => {
-      setCurrentBannerIndex((prev) => (prev + 1) % banners.length);
-    }, 3000); // 3 seconds rotation
-    return () => clearInterval(timer);
-  }, [banners.length]);
+    if (banners.length > 0) {
+      // Pick a random banner on mount or when banners change
+      const randomIndex = Math.floor(Math.random() * banners.length);
+      setCurrentBannerIndex(randomIndex);
+    }
+  }, [banners]);
 
-  const nextBanner = () => setCurrentBannerIndex((prev) => (prev + 1) % banners.length);
-  const prevBanner = () => setCurrentBannerIndex((prev) => (prev - 1 + banners.length) % banners.length);
+  // Record impression for the current active banner
+  useEffect(() => {
+    if (banners.length > 0 && banners[currentBannerIndex]) {
+      dbService.recordBannerView(banners[currentBannerIndex].id);
+    }
+  }, [currentBannerIndex, banners]);
+
+  const handleBannerClick = (id: string) => {
+    dbService.recordBannerClick(id);
+  };
+
+  const currentBanner = banners[currentBannerIndex];
 
   const handleReveal = () => setIsNumberRevealed(true);
 
@@ -139,6 +151,21 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
   // Improved WhatsApp link with product context
   const whatsappMessage = encodeURIComponent(`Hello! I saw your ad for "${listing.title}" on ${config.siteName}. Is it still available?`);
   const whatsappUrl = `https://wa.me/${seller.whatsapp?.replace(/\D/g, '')}?text=${whatsappMessage}`;
+
+  if (seller.isVacationMode) {
+    return (
+      <div className="max-w-7xl mx-auto px-4 py-12">
+        <button onClick={onBack} className="mb-8 text-gray-500 hover:text-gray-900 font-bold flex items-center gap-2 transition-colors"><i className="fas fa-arrow-left"></i> Back to Listings</button>
+        <div className="bg-purple-50 border border-purple-100 rounded-[3rem] p-12 text-center shadow-sm">
+           <div className="w-24 h-24 bg-purple-100 text-purple-600 rounded-full flex items-center justify-center text-4xl mx-auto mb-6 shadow-lg shadow-purple-100">
+              <i className="fas fa-umbrella-beach"></i>
+           </div>
+           <h2 className="text-3xl font-black text-purple-900 uppercase tracking-tight mb-2">Seller on Vacation</h2>
+           <p className="text-purple-700 font-medium max-w-md mx-auto">This seller is currently taking a break. Their listings are temporarily unavailable. Please check back later!</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="max-w-7xl mx-auto p-0">
@@ -249,27 +276,48 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
       </div>
 
       {/* Seller Ratings Section */}
-      {sellerRatings.length > 0 && (
-        <div className="mb-12 bg-white p-10 rounded-[3rem] border border-gray-100">
-          <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight mb-8">Seller Feedback</h3>
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {sellerRatings.slice(0, 4).map(rating => (
-              <div key={rating.id} className="p-6 bg-gray-50 rounded-2xl border border-gray-100">
-                <div className="flex justify-between items-start mb-4">
-                  <div>
-                    <p className="text-xs font-black text-gray-900 uppercase">{rating.fromUserName}</p>
-                    <p className="text-[8px] font-bold text-gray-400 uppercase mt-1">{new Date(rating.timestamp).toLocaleDateString()}</p>
-                  </div>
-                  <div className="flex text-yellow-400 text-[10px]">
-                    {renderStars(rating.score)}
-                  </div>
-                </div>
-                <p className="text-sm text-gray-600 italic">"{rating.comment}"</p>
-              </div>
-            ))}
+      <div className="mb-12 bg-white p-10 rounded-[3rem] border border-gray-100 transition-all">
+        <button 
+          onClick={() => setIsFeedbackExpanded(!isFeedbackExpanded)} 
+          className="w-full flex justify-between items-center group"
+        >
+          <h3 className="text-xl font-black text-gray-900 uppercase tracking-tight group-hover:text-blue-600 transition-colors">Seller Feedback</h3>
+          <div className={`w-10 h-10 rounded-full bg-gray-50 flex items-center justify-center transition-all ${isFeedbackExpanded ? 'bg-blue-600 text-white rotate-180' : 'text-gray-400 group-hover:bg-blue-50 group-hover:text-blue-600'}`}>
+            <i className="fas fa-chevron-down"></i>
           </div>
-        </div>
-      )}
+        </button>
+        
+        {isFeedbackExpanded && (
+          <div className="mt-8 animate-in slide-in-from-top-2 fade-in duration-300">
+            {sellerRatings.length > 0 ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                {sellerRatings.slice(0, 4).map(rating => (
+                  <div key={rating.id} className="p-6 bg-gray-50 rounded-2xl border border-gray-100">
+                    <div className="flex justify-between items-start mb-4">
+                      <div>
+                        <p className="text-xs font-black text-gray-900 uppercase">{rating.fromUserName}</p>
+                        <p className="text-[8px] font-bold text-gray-400 uppercase mt-1">{new Date(rating.timestamp).toLocaleDateString()}</p>
+                      </div>
+                      <div className="flex text-yellow-400 text-[10px]">
+                        {renderStars(rating.score)}
+                      </div>
+                    </div>
+                    <p className="text-sm text-gray-600 italic">"{rating.comment}"</p>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-12 bg-gray-50 rounded-[2rem] border-2 border-dashed border-gray-100">
+                <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4 text-gray-400 text-2xl">
+                  <i className="far fa-comment-alt"></i>
+                </div>
+                <p className="text-gray-500 font-bold text-sm">No feedback yet</p>
+                <p className="text-[10px] text-gray-400 uppercase tracking-widest mt-1">Be the first to rate this seller</p>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
 
       {/* Rating Submission Modal */}
       {showRatingModal && (
@@ -315,24 +363,15 @@ export const ProductDetail: React.FC<ProductDetailProps> = ({
         </div>
       )}
 
-      {/* Existing Banner and Related Listings code below remains exactly the same */}
-      {banners.length > 0 && (
+      {/* Single Random Banner */}
+      {currentBanner && (
         <div className="mb-6 relative group">
            <div className="relative w-full rounded-2xl md:rounded-[2rem] overflow-hidden shadow-sm border border-gray-100 bg-white p-2">
               <div className="relative w-full overflow-hidden rounded-xl" style={{ aspectRatio: '4 / 1' }}>
-                {banners.map((banner, index) => (
-                  <a key={banner.id} href={banner.linkUrl} target="_blank" rel="noopener noreferrer" className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentBannerIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}>
-                    <img src={banner.imageUrl} className="w-full h-full object-cover" alt="" />
-                    <div className="absolute top-2 right-2 bg-white/10 backdrop-blur-md text-white/60 text-[7px] font-black uppercase px-2 py-0.5 rounded border border-white/5 tracking-widest">Sponsored</div>
-                  </a>
-                ))}
-                {banners.length > 1 && (
-                  <>
-                    <button onClick={prevBanner} className="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-8 h-8 bg-white/20 hover:bg-white/40 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"><i className="fas fa-chevron-left text-xs"></i></button>
-                    <button onClick={nextBanner} className="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-8 h-8 bg-white/20 hover:bg-white/40 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center"><i className="fas fa-chevron-right text-xs"></i></button>
-                    <div className="absolute bottom-2 left-1/2 -translate-x-1/2 z-20 flex space-x-1.5">{banners.map((_, i) => (<button key={i} onClick={() => setCurrentBannerIndex(i)} className={`w-1 h-1 rounded-full transition-all ${i === currentBannerIndex ? 'bg-white w-3' : 'bg-white/40'}`} />))}</div>
-                  </>
-                )}
+                <a href={currentBanner.linkUrl} target="_blank" rel="noopener noreferrer" onClick={() => handleBannerClick(currentBanner.id)} className="absolute inset-0">
+                  <img src={currentBanner.imageUrl} className="w-full h-full object-cover" alt="" />
+                  <div className="absolute top-2 right-2 bg-white/10 backdrop-blur-md text-white/60 text-[7px] font-black uppercase px-2 py-0.5 rounded border border-white/5 tracking-widest">Sponsored</div>
+                </a>
               </div>
            </div>
         </div>

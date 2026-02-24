@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect, useRef } from 'react';
-import { User, Listing, ListingStatus, UserRole, WalletTransaction, SubscriptionPlan, BannerAd, City, State } from '../types';
+import { User, Listing, ListingStatus, UserRole, WalletTransaction, SubscriptionPlan, BannerAd, City, State, Country } from '../types';
 import { dbService } from '../services/dbService';
 import { CITIES, STATES } from '../constants';
 
@@ -31,6 +31,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const [isProcessing, setIsProcessing] = useState<string | null>(null);
   const [transactions, setTransactions] = useState<WalletTransaction[]>([]);
   const [userBanners, setUserBanners] = useState<BannerAd[]>([]);
+  const [countries, setCountries] = useState<Country[]>([]);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const profilePhotoInputRef = useRef<HTMLInputElement>(null);
   
@@ -63,12 +64,14 @@ export const Dashboard: React.FC<DashboardProps> = ({
   }, [user.id]);
 
   const loadData = async () => {
-    const [tx, bn] = await Promise.all([
+    const [tx, bn, ctr] = await Promise.all([
       dbService.getTransactionsByUserId(user.id),
-      dbService.getUserBanners(user.id)
+      dbService.getUserBanners(user.id),
+      dbService.getCountries()
     ]);
     setTransactions(tx.sort((a,b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()));
     setUserBanners(bn);
+    setCountries(ctr);
   };
 
   const handleSubscribe = async (planId: string) => {
@@ -220,7 +223,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
                       {l.isPremium ? (
                         <div className="flex-1 bg-amber-50 text-amber-700 rounded-xl text-[9px] font-black uppercase flex items-center justify-center border border-amber-100">Premium Active</div>
                       ) : (
-                        <button onClick={() => onBoost(l.id)} className="flex-1 bg-blue-50 text-blue-600 rounded-xl text-[9px] font-black uppercase flex items-center justify-center border border-blue-100 hover:bg-blue-600 hover:text-white transition-all">Promote Ad</button>
+                        <button onClick={() => onBoost(l.id)} className="flex-1 bg-blue-50 text-blue-600 rounded-xl text-[9px] font-black uppercase flex items-center justify-center border border-blue-100 hover:bg-blue-600 hover:text-white transition-all">Promote Ad (₹{config.premiumPrice})</button>
                       )}
                     </div>
                   </div>
@@ -313,10 +316,18 @@ export const Dashboard: React.FC<DashboardProps> = ({
                     </div>
                     
                     <div className="space-y-2">
+                       <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Country</label>
+                       <select className="w-full bg-gray-50 border border-gray-100 p-4 rounded-2xl font-bold outline-none appearance-none" value={profileForm.countryId} onChange={e => setProfileForm({...profileForm, countryId: e.target.value})}>
+                          <option value="">Select Country</option>
+                          {countries.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                       </select>
+                    </div>
+                    
+                    <div className="space-y-2">
                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">State</label>
                        <select className="w-full bg-gray-50 border border-gray-100 p-4 rounded-2xl font-bold outline-none appearance-none" value={profileForm.stateId} onChange={e => setProfileForm({...profileForm, stateId: e.target.value, cityId: ''})}>
                           <option value="">Select State</option>
-                          {STATES.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                          {STATES.filter(s => !profileForm.countryId || s.countryId === profileForm.countryId).map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
                        </select>
                     </div>
                     <div className="space-y-2">
@@ -331,6 +342,34 @@ export const Dashboard: React.FC<DashboardProps> = ({
                        <label className="text-[10px] font-black text-gray-400 uppercase tracking-widest ml-1">Physical Address / Shipping Info</label>
                        <textarea className="w-full bg-gray-50 border border-gray-100 p-5 rounded-2xl font-bold outline-none focus:bg-white focus:border-blue-500 transition-all h-24" value={profileForm.address} onChange={e => setProfileForm({...profileForm, address: e.target.value})} placeholder="House No, Building, Area, PIN Code..." />
                     </div>
+                  </div>
+
+                  <div className="pt-4 border-t border-gray-50">
+                     <div className="flex items-center justify-between bg-purple-50 p-6 rounded-2xl border border-purple-100">
+                        <div>
+                           <h4 className="text-sm font-black text-purple-900 uppercase tracking-tight">Vacation Mode</h4>
+                           <p className="text-[10px] font-bold text-purple-600 mt-1">Temporarily hide all your listings from buyers.</p>
+                        </div>
+                        <button 
+                           type="button"
+                           onClick={async () => {
+                              const newStatus = !user.isVacationMode;
+                              setIsProcessing('vacation');
+                              try {
+                                 const updatedUser = await dbService.updateUserProfile(user.id, { isVacationMode: newStatus });
+                                 if (updatedUser && onUpdateUser) onUpdateUser(updatedUser);
+                                 notify(newStatus ? "Vacation mode enabled. Your ads are now hidden." : "Welcome back! Your ads are visible again.", "success");
+                              } catch (err: any) {
+                                 notify(err.message, "error");
+                              } finally {
+                                 setIsProcessing(null);
+                              }
+                           }}
+                           className={`w-14 h-8 rounded-full transition-all relative ${user.isVacationMode ? 'bg-purple-600' : 'bg-gray-300'}`}
+                        >
+                           <div className={`absolute top-1 w-6 h-6 bg-white rounded-full transition-all shadow-sm ${user.isVacationMode ? 'left-7' : 'left-1'}`}></div>
+                        </button>
+                     </div>
                   </div>
 
                   <div className="pt-4">

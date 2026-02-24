@@ -287,6 +287,12 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
                        <a href={b.linkUrl} target="_blank" rel="noreferrer" className="bg-white text-gray-900 px-4 py-2 rounded-xl text-[9px] font-black uppercase shadow-xl">Visit Link <i className="fas fa-external-link-alt ml-1"></i></a>
                     </div>
                   </div>
+                  <div className="mt-3 px-1">
+                     <p className="text-[9px] font-black text-gray-400 uppercase tracking-widest mb-1">Target Link:</p>
+                     <a href={b.linkUrl} target="_blank" rel="noreferrer" className="text-blue-600 text-xs font-bold hover:underline break-all flex items-center gap-2 bg-blue-50 p-3 rounded-xl border border-blue-100">
+                        <i className="fas fa-link"></i> {b.linkUrl}
+                     </a>
+                  </div>
                   <div className="flex gap-3 pt-2">
                     <button onClick={() => handleBannerAction(b.id, 'LIVE')} disabled={isProcessingAction === b.id} className="flex-1 bg-emerald-600 text-white py-4 rounded-2xl text-[10px] font-black uppercase shadow-lg shadow-emerald-100">Activate Ad</button>
                     <button onClick={() => handleBannerAction(b.id, 'REJECTED')} disabled={isProcessingAction === b.id} className="flex-1 bg-white border border-rose-100 text-rose-600 py-4 rounded-2xl text-[10px] font-black uppercase">Reject Ad</button>

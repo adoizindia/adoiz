@@ -31,23 +31,20 @@ export const Home: React.FC<HomeProps> = ({ city, onSearch, onCategorySelect, on
     }
   }, [currentBannerIndex, banners]);
 
-  // Banner Auto-slider Logic
+  // Random Banner Logic
   useEffect(() => {
-    if (banners.length <= 1) return;
-    
-    const timer = setInterval(() => {
-      setCurrentBannerIndex((prev) => (prev + 1) % banners.length);
-    }, 5000); // 5 seconds rotation
-
-    return () => clearInterval(timer);
-  }, [banners.length]);
-
-  const nextBanner = () => setCurrentBannerIndex((prev) => (prev + 1) % banners.length);
-  const prevBanner = () => setCurrentBannerIndex((prev) => (prev - 1 + banners.length) % banners.length);
+    if (banners.length > 0) {
+      // Pick a random banner on mount or when banners change
+      const randomIndex = Math.floor(Math.random() * banners.length);
+      setCurrentBannerIndex(randomIndex);
+    }
+  }, [banners]);
 
   const handleBannerClick = (id: string) => {
     dbService.recordBannerClick(id);
   };
+
+  const currentBanner = banners[currentBannerIndex];
 
   return (
     <div className="flex flex-col items-center px-4 pt-6 md:pt-12 pb-20 overflow-x-hidden">
@@ -64,51 +61,25 @@ export const Home: React.FC<HomeProps> = ({ city, onSearch, onCategorySelect, on
         ))}
       </div>
 
-      {/* City-Locked Banner Carousel */}
-      {banners.length > 0 && (
+      {/* Single Random Banner */}
+      {currentBanner && (
         <div className="w-full max-w-7xl px-4 relative group mb-0 mt-8">
            <div 
             className="relative w-full rounded-2xl md:rounded-[2rem] overflow-hidden shadow-2xl border border-gray-100 bg-gray-100"
             style={{ aspectRatio: '4 / 1' }}
            >
-              {banners.map((banner, index) => (
-                <a 
-                  key={banner.id}
-                  href={banner.linkUrl} 
-                  onClick={() => handleBannerClick(banner.id)}
-                  target="_blank" 
-                  rel="noopener noreferrer"
-                  className={`absolute inset-0 transition-opacity duration-1000 ease-in-out ${index === currentBannerIndex ? 'opacity-100 z-10' : 'opacity-0 z-0'}`}
-                >
-                  <img src={banner.imageUrl} className="w-full h-full object-cover" alt="Sponsor" />
-                  <div className="absolute top-4 right-4 bg-white/10 backdrop-blur-md text-white/60 text-[8px] font-black uppercase px-2 py-1 rounded border border-white/5 tracking-widest">
-                    Sponsored
-                  </div>
-                </a>
-              ))}
-
-              {/* Slider Controls */}
-              {banners.length > 1 && (
-                <>
-                  <button onClick={prevBanner} className="absolute left-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 bg-white/20 hover:bg-white/40 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                    <i className="fas fa-chevron-left"></i>
-                  </button>
-                  <button onClick={nextBanner} className="absolute right-4 top-1/2 -translate-y-1/2 z-20 w-10 h-10 bg-white/20 hover:bg-white/40 backdrop-blur-md rounded-full text-white opacity-0 group-hover:opacity-100 transition-opacity">
-                    <i className="fas fa-chevron-right"></i>
-                  </button>
-                  
-                  {/* Indicators */}
-                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-20 flex space-x-2">
-                    {banners.map((_, i) => (
-                      <button 
-                        key={i} 
-                        onClick={() => setCurrentBannerIndex(i)}
-                        className={`w-1.5 h-1.5 rounded-full transition-all ${i === currentBannerIndex ? 'bg-white w-4' : 'bg-white/40'}`}
-                      />
-                    ))}
-                  </div>
-                </>
-              )}
+              <a 
+                href={currentBanner.linkUrl} 
+                onClick={() => handleBannerClick(currentBanner.id)}
+                target="_blank" 
+                rel="noopener noreferrer"
+                className="absolute inset-0"
+              >
+                <img src={currentBanner.imageUrl} className="w-full h-full object-cover" alt="Sponsor" />
+                <div className="absolute top-4 right-4 bg-white/10 backdrop-blur-md text-white/60 text-[8px] font-black uppercase px-2 py-1 rounded border border-white/5 tracking-widest">
+                  Sponsored
+                </div>
+              </a>
            </div>
         </div>
       )}

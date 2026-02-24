@@ -1,5 +1,11 @@
 
-import { State, City, UserRole, User, Listing, ListingStatus } from './types';
+import { State, City, UserRole, User, Listing, ListingStatus, Country } from './types';
+
+export const COUNTRIES: Country[] = [
+  { id: 'ctr1', name: 'India', code: '+91' },
+  { id: 'ctr2', name: 'USA', code: '+1' },
+  { id: 'ctr3', name: 'UK', code: '+44' }
+];
 
 // Fixed: Added missing countryId property required by the State interface
 export const STATES: State[] = [
@@ -25,7 +31,7 @@ export const MOCK_USER: User = {
   mobile: '+91 9876543210',
   whatsapp: '+91 9876543210',
   photo: 'https://picsum.photos/seed/u1/200',
-  walletBalance: 500
+  walletBalance: 50000
 };
 
 export const ADDITIONAL_MOCK_USERS: User[] = [
@@ -39,7 +45,7 @@ export const ADDITIONAL_MOCK_USERS: User[] = [
     mobile: '+91 9988776655',
     whatsapp: '+91 9988776655',
     photo: 'https://picsum.photos/seed/u2/200',
-    walletBalance: 1000
+    walletBalance: 50000
   },
   {
     id: 'u3',
@@ -51,7 +57,7 @@ export const ADDITIONAL_MOCK_USERS: User[] = [
     mobile: '+91 8877665544',
     whatsapp: '+91 8877665544',
     photo: 'https://picsum.photos/seed/u3/200',
-    walletBalance: 200
+    walletBalance: 50000
   },
   {
     id: 'u5',
@@ -63,7 +69,7 @@ export const ADDITIONAL_MOCK_USERS: User[] = [
     mobile: '+91 7766554433',
     whatsapp: '+91 7766554433',
     photo: 'https://picsum.photos/seed/u5/200',
-    walletBalance: 1500
+    walletBalance: 50000
   },
   {
     id: 'u6',
@@ -75,7 +81,7 @@ export const ADDITIONAL_MOCK_USERS: User[] = [
     mobile: '+91 6655443322',
     whatsapp: '+91 6655443322',
     photo: 'https://picsum.photos/seed/u6/200',
-    walletBalance: 800
+    walletBalance: 50000
   },
   {
     id: 'u7',
@@ -87,7 +93,7 @@ export const ADDITIONAL_MOCK_USERS: User[] = [
     mobile: '+91 5544332211',
     whatsapp: '+91 5544332211',
     photo: 'https://picsum.photos/seed/u7/200',
-    walletBalance: 3000
+    walletBalance: 50000
   }
 ];
 

@@ -1,7 +1,7 @@
 
 import React, { useState } from 'react';
 import { UserRole, User } from '../types';
-import { MOCK_USER, STATES, CITIES } from '../constants';
+import { MOCK_USER, STATES, CITIES, COUNTRIES } from '../constants';
 import { dbService } from '../services/dbService';
 
 interface AuthProps {
@@ -17,9 +17,13 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, onGoogleLogin, onFacebookLo
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
+  const [selectedCountryId, setSelectedCountryId] = useState('');
   const [selectedStateId, setSelectedStateId] = useState('');
   const [selectedCityId, setSelectedCityId] = useState('');
+  const [mobile, setMobile] = useState('');
+  const [referralCode, setReferralCode] = useState('');
 
+  const filteredStates = STATES.filter(s => s.countryId === selectedCountryId);
   const filteredCities = CITIES.filter(c => c.stateId === selectedStateId);
 
   const handleAuth = async (e: React.FormEvent) => {
@@ -46,7 +50,15 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, onGoogleLogin, onFacebookLo
         }
       } else {
         const newUser = await dbService.registerUser({
-          email, name, role: UserRole.USER, cityId: selectedCityId, stateId: selectedStateId, walletBalance: 0
+          email, 
+          name, 
+          role: UserRole.USER, 
+          countryId: selectedCountryId,
+          stateId: selectedStateId, 
+          cityId: selectedCityId, 
+          mobile,
+          walletBalance: 0,
+          referralCode
         });
         onLogin(newUser);
       }
@@ -91,12 +103,12 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, onGoogleLogin, onFacebookLo
         </div>
 
         <div className="space-y-4 pt-4">
-          <button onClick={onGoogleLogin} disabled={!!loading} className="w-full flex items-center justify-between bg-white border border-gray-100 py-4 px-6 rounded-2xl hover:border-blue-500 transition-all shadow-sm active:scale-[0.98] disabled:opacity-50 group">
+          <button onClick={() => alert("Social login is currently disabled in this preview environment.")} disabled={!!loading} className="w-full flex items-center justify-between bg-white border border-gray-100 py-4 px-6 rounded-2xl hover:border-blue-500 transition-all shadow-sm active:scale-[0.98] disabled:opacity-50 group opacity-50 cursor-not-allowed">
             <div className="flex items-center space-x-4">
-              <img src="https://upload.wikimedia.org/wikipedia/commons/5/53/Google_%22G%22_Logo.svg" className="w-5 h-5" alt="Google" />
-              <span className="text-xs font-black text-gray-700 uppercase tracking-widest">Continue with Google</span>
+              <i className="fab fa-google text-gray-400"></i>
+              <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Continue with Google (Disabled)</span>
             </div>
-            <i className="fas fa-chevron-right text-[10px] text-gray-300"></i>
+            <i className="fas fa-lock text-[10px] text-gray-300"></i>
           </button>
         </div>
 
@@ -111,16 +123,26 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, onGoogleLogin, onFacebookLo
             {!isLogin && (
               <>
                 <input type="text" required value={name} onChange={e => setName(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 outline-none focus:border-blue-500 text-sm font-bold" placeholder="Full Name" />
+                
                 <div className="grid grid-cols-2 gap-3">
-                   <select required value={selectedStateId} onChange={e => setSelectedStateId(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-4 outline-none text-xs font-bold appearance-none">
-                      <option value="">State</option>
-                      {STATES.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                   <select required value={selectedCountryId} onChange={e => { setSelectedCountryId(e.target.value); setSelectedStateId(''); setSelectedCityId(''); }} className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-4 outline-none text-xs font-bold appearance-none">
+                      <option value="">Country</option>
+                      {COUNTRIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                    </select>
+                   <select required value={selectedStateId} onChange={e => { setSelectedStateId(e.target.value); setSelectedCityId(''); }} disabled={!selectedCountryId} className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-4 outline-none text-xs font-bold appearance-none disabled:opacity-50">
+                      <option value="">State</option>
+                      {filteredStates.map(s => <option key={s.id} value={s.id}>{s.name}</option>)}
+                   </select>
+                </div>
+
+                <div className="grid grid-cols-2 gap-3">
                    <select required value={selectedCityId} onChange={e => setSelectedCityId(e.target.value)} disabled={!selectedStateId} className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-4 outline-none text-xs font-bold appearance-none disabled:opacity-50">
                       <option value="">City</option>
                       {filteredCities.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
                    </select>
+                   <input type="tel" required value={mobile} onChange={e => setMobile(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-4 py-4 outline-none focus:border-blue-500 text-xs font-bold" placeholder="Mobile Number" />
                 </div>
+                <input type="text" value={referralCode} onChange={e => setReferralCode(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 outline-none focus:border-blue-500 text-sm font-bold" placeholder="Referral Code (Optional)" />
               </>
             )}
             <input type="email" required value={email} onChange={e => setEmail(e.target.value)} className="w-full bg-gray-50 border border-gray-100 rounded-2xl px-6 py-4 outline-none focus:border-blue-500 text-sm font-bold" placeholder="Email" />
