@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { dbService } from '../services/dbService';
-import { Listing, ListingStatus, User, BannerAd, SupportTicket, AdReport } from '../types';
+import { Listing, ListingStatus, User, BannerAd, SupportTicket, AdReport, UserRole } from '../types';
 import { CITIES } from '../constants';
 
 interface ModerationPanelProps {
@@ -78,14 +78,20 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
   };
 
   const handleReportAction = async (reportId: string, listingId: string, action: 'DISMISS' | 'REMOVE_AD') => {
+    if (action === 'REMOVE_AD') {
+      if (!window.confirm("Are you sure you want to remove this listing? This action cannot be undone.")) {
+        return;
+      }
+    }
+    
     setIsProcessingAction(reportId);
     try {
       if (action === 'DISMISS') {
-        await dbService.resolveAdReport(reportId, 'DISMISSED');
+        await dbService.resolveAdReport(reportId, 'DISMISSED', user.id);
         notify("Report closed.", "info");
       } else {
         await dbService.updateListingStatus(listingId, ListingStatus.REJECTED, "Reported by users", user.id);
-        await dbService.resolveAdReport(reportId, 'RESOLVED');
+        await dbService.resolveAdReport(reportId, 'RESOLVED', user.id);
         notify("Ad removed.", "error");
       }
       loadAllQueues(false);
@@ -120,7 +126,7 @@ export const ModerationPanel: React.FC<ModerationPanelProps> = ({ user, onBack }
   const handleTicketAction = async (id: string) => {
     setIsProcessingAction(id);
     try {
-      await dbService.resolveTicket(id);
+      await dbService.resolveTicket(id, user.id);
       notify("Support query resolved.", "success");
       loadAllQueues(false);
     } catch (err: any) {

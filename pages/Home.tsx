@@ -19,7 +19,14 @@ export const Home: React.FC<HomeProps> = ({ city, onSearch, onCategorySelect, on
   const config = dbService.getSystemConfig();
 
   useEffect(() => {
-    dbService.getListingsByCity(city.id).then(setListings);
+    dbService.getListingsByCity(city.id).then(data => {
+      // Sort: Premium first, then Newest
+      const sorted = [...data].sort((a, b) => {
+        if (a.isPremium !== b.isPremium) return a.isPremium ? -1 : 1;
+        return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      });
+      setListings(sorted);
+    });
     dbService.getCategories().then(setCategories);
     dbService.getActiveBanners(city.id).then(setBanners);
   }, [city.id]);

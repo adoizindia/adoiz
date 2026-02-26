@@ -16,16 +16,95 @@ class DbService {
     MOCK_USER, 
     ...ADDITIONAL_MOCK_USERS,
     { ...MOCK_USER, id: 'admin-master', role: UserRole.ADMIN, name: 'System Admin', email: 'admin@adoiz.com', walletBalance: 50000 },
-    { ...MOCK_USER, id: 'mod-mumbai', role: UserRole.MODERATOR, name: 'Mumbai Moderator', email: 'mod@adoiz.com', managedCityIds: ['c1'], walletBalance: 50000 }
+    { ...MOCK_USER, id: 'mod-mumbai', role: UserRole.MODERATOR, name: 'Mumbai Moderator', email: 'mod@adoiz.com', managedCityIds: ['c1'], walletBalance: 50000 },
+    { ...MOCK_USER, id: 'mod-pune', role: UserRole.MODERATOR, name: 'Pune Moderator', email: 'mod-pune@adoiz.com', managedCityIds: ['c2'], walletBalance: 50000 },
+    { ...MOCK_USER, id: 'mod-delhi', role: UserRole.MODERATOR, name: 'Delhi Moderator', email: 'mod-delhi@adoiz.com', managedCityIds: ['c4'], walletBalance: 50000 }
   ];
   private _listings: Listing[] = [...MOCK_LISTINGS];
-  private _banners: BannerAd[] = [];
+  private _banners: BannerAd[] = [
+    {
+      id: 'b-mock-1',
+      userId: 'u2',
+      cityId: 'c1',
+      title: 'Summer Sale 50% Off',
+      imageUrl: 'https://picsum.photos/seed/banner1/1600/400',
+      linkUrl: 'https://example.com/sale',
+      status: 'PENDING',
+      createdAt: new Date().toISOString(),
+      views: 0,
+      clicks: 0,
+      budget: 5000,
+      cpmRate: 500,
+      targetImpressions: 10000
+    },
+    {
+      id: 'b-mock-2',
+      userId: 'u5',
+      cityId: 'c2',
+      title: 'New Car Launch',
+      imageUrl: 'https://picsum.photos/seed/banner2/1600/400',
+      linkUrl: 'https://example.com/cars',
+      status: 'PENDING',
+      createdAt: new Date().toISOString(),
+      views: 0,
+      clicks: 0,
+      budget: 10000,
+      cpmRate: 300,
+      targetImpressions: 33000
+    }
+  ];
   private _chats: Chat[] = [];
   private _messages: Record<string, Message[]> = {};
-  private _reports: AdReport[] = [];
+  private _reports: AdReport[] = [
+    {
+      id: 'r-mock-1',
+      listingId: 'l1',
+      listingTitle: 'iPhone 15 Pro - 256GB Space Black',
+      reporterId: 'u3',
+      reporterName: 'Anjali Sharma',
+      cityId: 'c1',
+      reason: 'FRAUD',
+      details: 'Seller is asking for advance payment before meeting.',
+      status: 'PENDING',
+      createdAt: new Date().toISOString()
+    },
+    {
+      id: 'r-mock-2',
+      listingId: 'l6',
+      listingTitle: 'Maruti Suzuki Swift VXI 2019',
+      reporterId: 'u1',
+      reporterName: 'John Doe',
+      cityId: 'c2',
+      reason: 'MISLEADING',
+      details: 'Price listed is incorrect, asking for more on call.',
+      status: 'PENDING',
+      createdAt: new Date().toISOString()
+    }
+  ];
   private _transactions: WalletTransaction[] = [];
   private _ratings: Rating[] = [];
-  private _tickets: SupportTicket[] = [];
+  private _tickets: SupportTicket[] = [
+    {
+      id: 't-mock-1',
+      userId: 'u2',
+      userName: 'Rajesh Malhotra',
+      cityId: 'c1',
+      subject: 'Payment Issue',
+      message: 'I recharged my wallet but balance is not updated.',
+      status: 'OPEN',
+      createdAt: new Date().toISOString()
+    },
+    {
+      id: 't-mock-2',
+      userId: 'u6',
+      userName: 'Suresh Patil',
+      cityId: 'c2',
+      subject: 'Account Verification',
+      message: 'How do I get the blue tick verification?',
+      status: 'OPEN',
+      createdAt: new Date().toISOString()
+    }
+  ];
 
   // Helper for API calls with mock fallback
   private async request(endpoint: string, options: RequestInit = {}, fallbackData?: any) {
@@ -393,12 +472,61 @@ class DbService {
   }
   
   async createListing(l: Partial<Listing>): Promise<Listing> {
-    const newListing = { id: `l-${Date.now()}`, ...l } as Listing;
+    const config = this.getSystemConfig();
+    const user = await this.getUserById(l.sellerId!);
+    
+    if (!user) throw new Error("User not found");
+
+    // Check if user has active subscription
+    const isSubscribed = user.subscription?.status === 'ACTIVE' && new Date(user.subscription.expiresAt) > new Date();
+    
+    // Count existing listings for free limit check
+    const userListingsCount = this._listings.filter(listing => listing.sellerId === l.sellerId).length;
+    
+    let price = 0;
+
+    // If not subscribed and exceeded free limit, charge standard price
+    if (!isSubscribed && userListingsCount >= config.freeAdLimit) {
+      price = config.standardAdPrice;
+    }
+
+    if (price > 0) {
+       if (user.walletBalance < price) {
+        throw new Error(`Insufficient wallet balance. Standard ad listing costs ₹${price}.`);
+       }
+       
+       const userIndex = this._users.findIndex(u => u.id === user.id);
+       if (userIndex >= 0) {
+         this._users[userIndex].walletBalance -= price;
+         
+         this._transactions.push({
+            id: `txn-${Date.now()}`,
+            userId: user.id,
+            amount: price,
+            type: 'DEBIT',
+            description: `Standard Ad Listing: ${l.title}`,
+            timestamp: new Date().toISOString()
+         });
+       }
+    }
+
+    const newListing = { 
+      id: `l-${Date.now()}`, 
+      status: ListingStatus.PENDING,
+      createdAt: new Date().toISOString(),
+      views: 0,
+      ...l 
+    } as Listing;
     this._listings.push(newListing);
     return this.request('/listings', { method: 'POST', body: JSON.stringify(l) }, newListing);
   }
 
   async updateListing(id: string, data: Partial<Listing>): Promise<Listing> {
+    const index = this._listings.findIndex(l => l.id === id);
+    if (index !== -1) {
+      this._listings[index] = { ...this._listings[index], ...data };
+      return this.request(`/listings/${id}`, { method: 'PATCH', body: JSON.stringify(data) }, this._listings[index]);
+    }
     return this.request(`/listings/${id}`, { method: 'PATCH', body: JSON.stringify(data) }, { id, ...data } as Listing);
   }
 
@@ -449,9 +577,15 @@ class DbService {
     const listingIndex = this._listings.findIndex(l => l.id === id);
     if (listingIndex >= 0) {
       this._listings[listingIndex].status = status;
-      return this.request(`/admin/listings/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, reason }) }, this._listings[listingIndex]);
+      if (reason) this._listings[listingIndex].rejectionReason = reason;
+      if (adminId) {
+        this._listings[listingIndex].moderatorId = adminId;
+        const admin = this._users.find(u => u.id === adminId);
+        if (admin) this._listings[listingIndex].moderatorName = admin.name;
+      }
+      return this.request(`/admin/listings/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, reason, adminId }) }, this._listings[listingIndex]);
     }
-    return this.request(`/admin/listings/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, reason }) }, { id, status } as Listing);
+    return this.request(`/admin/listings/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, reason, adminId }) }, { id, status, rejectionReason: reason, moderatorId: adminId } as Listing);
   }
 
   // --- Banners ---
@@ -492,7 +626,19 @@ class DbService {
     }
 
     // 3. Deduct Budget
-    await this.rechargeWallet(user.id, -(ad.budget || 0));
+    const userIndex = this._users.findIndex(u => u.id === user.id);
+    if (userIndex >= 0) {
+      this._users[userIndex].walletBalance -= (ad.budget || 0);
+      
+      this._transactions.push({
+        id: `txn-${Date.now()}`,
+        userId: user.id,
+        amount: ad.budget || 0,
+        type: 'DEBIT',
+        description: `Banner Ad Payment: ${ad.title}`,
+        timestamp: new Date().toISOString()
+      });
+    }
 
     // 4. Calculate Impressions
     const config = this.getSystemConfig();
@@ -535,10 +681,15 @@ class DbService {
       
       this._banners[bannerIndex].status = status;
       if (reason) this._banners[bannerIndex].rejectionReason = reason;
+      if (adminId) {
+        this._banners[bannerIndex].moderatorId = adminId;
+        const admin = this._users.find(u => u.id === adminId);
+        if (admin) this._banners[bannerIndex].moderatorName = admin.name;
+      }
       
-      return this.request(`/admin/banners/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, reason }) }, this._banners[bannerIndex]);
+      return this.request(`/admin/banners/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, reason, adminId }) }, this._banners[bannerIndex]);
     }
-    return this.request(`/admin/banners/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, reason }) }, { id, status } as BannerAd);
+    return this.request(`/admin/banners/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status, reason, adminId }) }, { id, status, rejectionReason: reason, moderatorId: adminId } as BannerAd);
   }
 
   async recordBannerView(id: string): Promise<void> {
@@ -563,7 +714,7 @@ class DbService {
 
   // --- Moderation Queue ---
   async getModerationQueue(cityIds: string[]): Promise<Listing[]> { 
-    const pendingListings = this._listings.filter(l => l.status === ListingStatus.PENDING && (cityIds.length === 0 || cityIds.includes(l.cityId)));
+    const pendingListings = this._listings.filter(l => (l.status === ListingStatus.PENDING || l.status === ListingStatus.EDIT_PENDING) && (cityIds.length === 0 || cityIds.includes(l.cityId)));
     return this.request('/admin/moderation/listings', {}, pendingListings); 
   }
   async getModerationBanners(cityIds: string[]): Promise<BannerAd[]> { 
@@ -574,19 +725,39 @@ class DbService {
   async getModerationReports(cityIds: string[]): Promise<AdReport[]> { 
     return this.request('/admin/moderation/reports', {}, this._reports.filter(r => r.status === 'PENDING')); 
   }
+  async getAllReports(): Promise<AdReport[]> {
+    return this.request('/admin/reports', {}, this._reports);
+  }
   async getModerationTickets(cityIds: string[]): Promise<SupportTicket[]> { 
     return this.request('/admin/moderation/tickets', {}, this._tickets.filter(t => t.status === 'OPEN')); 
   }
-  
-  async resolveAdReport(reportId: string, status: 'RESOLVED' | 'DISMISSED'): Promise<AdReport> {
-    const report = this._reports.find(r => r.id === reportId);
-    if (report) report.status = status;
-    return this.request(`/admin/moderation/reports/${reportId}/status`, { method: 'PATCH', body: JSON.stringify({ status }) }, { id: reportId, status } as AdReport);
+  async getAllTickets(): Promise<SupportTicket[]> {
+    return this.request('/admin/tickets', {}, this._tickets);
   }
-  async resolveTicket(ticketId: string): Promise<SupportTicket> {
+  
+  async resolveAdReport(reportId: string, status: 'RESOLVED' | 'DISMISSED', moderatorId?: string): Promise<AdReport> {
+    const report = this._reports.find(r => r.id === reportId);
+    if (report) {
+      report.status = status;
+      if (moderatorId) {
+        report.moderatorId = moderatorId;
+        const mod = this._users.find(u => u.id === moderatorId);
+        if (mod) report.moderatorName = mod.name;
+      }
+    }
+    return this.request(`/admin/moderation/reports/${reportId}/status`, { method: 'PATCH', body: JSON.stringify({ status, moderatorId }) }, { id: reportId, status, moderatorId } as AdReport);
+  }
+  async resolveTicket(ticketId: string, moderatorId?: string): Promise<SupportTicket> {
     const ticket = this._tickets.find(t => t.id === ticketId);
-    if (ticket) ticket.status = 'RESOLVED';
-    return this.request(`/admin/moderation/tickets/${ticketId}/resolve`, { method: 'PATCH' }, { id: ticketId, status: 'RESOLVED' } as SupportTicket);
+    if (ticket) {
+      ticket.status = 'RESOLVED';
+      if (moderatorId) {
+        ticket.moderatorId = moderatorId;
+        const mod = this._users.find(u => u.id === moderatorId);
+        if (mod) ticket.moderatorName = mod.name;
+      }
+    }
+    return this.request(`/admin/moderation/tickets/${ticketId}/resolve`, { method: 'PATCH', body: JSON.stringify({ moderatorId }) }, { id: ticketId, status: 'RESOLVED', moderatorId } as SupportTicket);
   }
 
   // --- Chats ---
@@ -626,7 +797,12 @@ class DbService {
 
   // --- Reports & Ratings ---
   async createAdReport(report: Partial<AdReport>): Promise<AdReport> {
-    const newReport = { id: 'r-new', ...report } as AdReport;
+    const newReport = { 
+      id: `r-${Date.now()}`, 
+      status: 'PENDING',
+      createdAt: new Date().toISOString(),
+      ...report 
+    } as AdReport;
     this._reports.push(newReport);
     return this.request('/reports', { method: 'POST', body: JSON.stringify(report) }, newReport);
   }

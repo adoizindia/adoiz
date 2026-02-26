@@ -1,4 +1,6 @@
 
+
+// Force recompile
 export enum UserRole {
   GUEST = 'GUEST',
   USER = 'USER',
@@ -191,6 +193,8 @@ export interface Listing {
   publishedAt?: string;
   createdAt: string;
   rejectionReason?: string;
+  moderatorId?: string;
+  moderatorName?: string;
   views: number;
 }
 
@@ -216,6 +220,8 @@ export interface BannerAd {
   status: 'PENDING' | 'LIVE' | 'REJECTED' | 'COMPLETED' | 'PAUSED';
   createdAt: string;
   rejectionReason?: string;
+  moderatorId?: string;
+  moderatorName?: string;
   views: number; // Current Impressions
   clicks: number;
   budget: number;
@@ -243,6 +249,8 @@ export interface AdReport {
   reason: 'FRAUD' | 'SPAM' | 'MISLEADING' | 'INAPPROPRIATE' | 'OTHER';
   details: string;
   status: 'PENDING' | 'RESOLVED' | 'DISMISSED';
+  moderatorId?: string;
+  moderatorName?: string;
   createdAt: string;
 }
 
@@ -254,5 +262,7 @@ export interface SupportTicket {
   subject: string;
   message: string;
   status: 'OPEN' | 'RESOLVED';
+  moderatorId?: string;
+  moderatorName?: string;
   createdAt: string;
 }

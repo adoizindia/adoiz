@@ -3,14 +3,14 @@ import { dbService } from '../services/dbService';
 import { 
   User, UserRole, Listing, ListingStatus, WalletTransaction, 
   SystemConfig, City, State, Country, Category, BannerAd,
-  SecurityLog, Rating, SubscriptionPlan
+  SecurityLog, Rating, SubscriptionPlan, AdReport, SupportTicket
 } from '../types';
 import { CITIES, STATES } from '../constants';
 
 type MainMenu = 
   | 'DASHBOARD' | 'USERS' | 'LISTINGS' | 'GEO_CATS' | 'REVENUE' | 'SYSTEM';
 
-type UserDetailTab = 'IDENTITY' | 'FINANCIAL' | 'INVENTORY' | 'BANNERS' | 'RATINGS';
+type UserDetailTab = 'IDENTITY' | 'FINANCIAL' | 'INVENTORY' | 'BANNERS' | 'RATINGS' | 'ACTIVITY';
 
 type RevenueFilter = '7d' | '1m' | '3m' | '6m' | '12m';
 
@@ -40,6 +40,8 @@ export const AdminPanel: React.FC<{
   const [users, setUsers] = useState<User[]>([]);
   const [listings, setListings] = useState<Listing[]>([]);
   const [banners, setBanners] = useState<BannerAd[]>([]);
+  const [allReports, setAllReports] = useState<AdReport[]>([]);
+  const [allTickets, setAllTickets] = useState<SupportTicket[]>([]);
   const [logs, setLogs] = useState<SecurityLog[]>([]);
   const [allTransactions, setAllTransactions] = useState<WalletTransaction[]>([]);
 
@@ -112,7 +114,7 @@ export const AdminPanel: React.FC<{
 
   const loadData = async () => {
     setLoading(true);
-    const [u, l, b, s, txns, ctrs, sts, cts, cats] = await Promise.all([
+    const [u, l, b, s, txns, ctrs, sts, cts, cats, reports, tickets] = await Promise.all([
       dbService.getAllUsers(),
       dbService.getAllListings(),
       dbService.getAllBanners(),
@@ -121,7 +123,9 @@ export const AdminPanel: React.FC<{
       dbService.getCountries(),
       dbService.getStates(),
       dbService.getCities(),
-      dbService.getCategories()
+      dbService.getCategories(),
+      dbService.getAllReports(),
+      dbService.getAllTickets()
     ]);
     setUsers(u);
     setListings(l);
@@ -132,6 +136,8 @@ export const AdminPanel: React.FC<{
     setStates(sts);
     setCities(cts);
     setCategories(cats);
+    setAllReports(reports);
+    setAllTickets(tickets);
     setLoading(false);
   };
 
@@ -986,14 +992,14 @@ export const AdminPanel: React.FC<{
   };
 
   const renderUsers = () => {
-    const filtered = users.filter(u => u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.email.toLowerCase().includes(searchQuery.toLowerCase()));
+    const filtered = users.filter(u => u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.email.toLowerCase().includes(searchQuery.toLowerCase()) || u.id.toLowerCase().includes(searchQuery.toLowerCase()));
     
     return (
       <div className="bg-white rounded-[3rem] border border-gray-100 shadow-sm overflow-hidden">
         <div className="p-8 border-b border-gray-50 flex items-center justify-between">
            <div className="relative flex-1 max-w-md">
               <i className="fas fa-search absolute left-5 top-1/2 -translate-y-1/2 text-gray-300"></i>
-              <input type="text" placeholder="Find user by name or email..." className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-12 pr-6 py-3 text-sm font-bold outline-none focus:ring-4 focus:ring-blue-500/5 focus:border-blue-500 transition-all" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+              <input type="text" placeholder="Find user by name, email or ID..." className="w-full bg-gray-50 border border-gray-100 rounded-2xl pl-12 pr-6 py-3 text-sm font-bold outline-none focus:ring-4 focus:ring-blue-500/5 focus:border-blue-500 transition-all" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
            </div>
         </div>
         <table className="w-full text-left">
@@ -1039,7 +1045,7 @@ export const AdminPanel: React.FC<{
   };
 
   const renderModerators = () => {
-    const moderators = users.filter(u => u.role === UserRole.MODERATOR && (u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.email.toLowerCase().includes(searchQuery.toLowerCase())));
+    const moderators = users.filter(u => u.role === UserRole.MODERATOR && (u.name.toLowerCase().includes(searchQuery.toLowerCase()) || u.email.toLowerCase().includes(searchQuery.toLowerCase()) || u.id.toLowerCase().includes(searchQuery.toLowerCase())));
     
     return (
       <div className="space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
@@ -1047,7 +1053,7 @@ export const AdminPanel: React.FC<{
           <div className="p-8 border-b border-gray-50 flex items-center justify-between bg-gray-50/20">
              <div className="relative flex-1 max-w-md">
                 <i className="fas fa-search absolute left-5 top-1/2 -translate-y-1/2 text-gray-300"></i>
-                <input type="text" placeholder="Search moderators..." className="w-full bg-white border border-gray-100 rounded-2xl pl-12 pr-6 py-3 text-sm font-bold outline-none focus:ring-4 focus:ring-blue-500/5 transition-all" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
+                <input type="text" placeholder="Search moderators by name, email or ID..." className="w-full bg-white border border-gray-100 rounded-2xl pl-12 pr-6 py-3 text-sm font-bold outline-none focus:ring-4 focus:ring-blue-500/5 transition-all" value={searchQuery} onChange={e => setSearchQuery(e.target.value)} />
              </div>
              <div className="bg-blue-50 text-blue-600 px-4 py-2 rounded-xl text-[10px] font-black uppercase">
                 {moderators.length} Moderators Total
@@ -1148,7 +1154,8 @@ export const AdminPanel: React.FC<{
               {id: 'IDENTITY', label: 'Identity & Access'},
               {id: 'FINANCIAL', label: 'Wallet & Ledgers'},
               {id: 'INVENTORY', label: 'Advertisements'},
-              {id: 'BANNERS', label: 'Banner Ads'}
+              {id: 'BANNERS', label: 'Banner Ads'},
+              ...(detailUser.role === UserRole.MODERATOR ? [{id: 'ACTIVITY', label: 'Mod Activity'}] : [])
             ].map(tab => (
                <button key={tab.id} onClick={() => setActiveUserDetailTab(tab.id as any)} className={`px-8 py-3 rounded-2xl text-[10px] font-black uppercase tracking-widest transition-all ${activeUserDetailTab === tab.id ? 'bg-slate-900 text-white' : 'text-gray-400 hover:bg-gray-50'}`}>{tab.label}</button>
             ))}
@@ -1361,6 +1368,70 @@ export const AdminPanel: React.FC<{
                         ))}
                         {detailBanners.length === 0 && (
                            <tr><td colSpan={4} className="px-10 py-20 text-center text-gray-400 font-black uppercase text-xs italic">This user has not posted any banner advertisements.</td></tr>
+                        )}
+                     </tbody>
+                  </table>
+               </div>
+            </div>
+         )}
+         {activeUserDetailTab === 'ACTIVITY' && detailUser.role === UserRole.MODERATOR && (
+            <div className="bg-white rounded-[3rem] border border-gray-100 shadow-sm overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-500">
+               <div className="p-8 border-b border-gray-50 bg-gray-50/20 flex justify-between items-center">
+                  <h3 className="text-xl font-black uppercase text-gray-900 tracking-tight">Moderator Activity Log</h3>
+                  <div className="bg-blue-50 text-blue-600 px-4 py-1 rounded-xl text-[10px] font-black uppercase">Recent Actions</div>
+               </div>
+               <div className="overflow-x-auto">
+                  <table className="w-full text-left">
+                     <thead>
+                        <tr className="text-[10px] font-black uppercase text-gray-400 border-b border-gray-50">
+                           <th className="px-10 py-6">Action Type</th>
+                           <th className="px-10 py-6">Item Details</th>
+                           <th className="px-10 py-6">Result</th>
+                           <th className="px-10 py-6 text-right">Timestamp</th>
+                        </tr>
+                     </thead>
+                     <tbody className="divide-y divide-gray-50">
+                        {/* Inferred Activity from Listings */}
+                        {listings.filter(l => l.moderatorId === detailUser.id).map(l => (
+                           <tr key={`act-l-${l.id}`} className="text-xs font-bold hover:bg-gray-50 transition-colors">
+                              <td className="px-10 py-6"><span className="bg-purple-50 text-purple-600 px-2 py-1 rounded text-[9px] font-black uppercase">Ad Review</span></td>
+                              <td className="px-10 py-6 text-gray-900">{l.title}</td>
+                              <td className="px-10 py-6"><span className={`uppercase text-[9px] font-black ${l.status === 'APPROVED' ? 'text-emerald-600' : 'text-rose-600'}`}>{l.status}</span></td>
+                              <td className="px-10 py-6 text-right text-gray-400 text-[10px] font-mono">Unknown</td>
+                           </tr>
+                        ))}
+                        {/* Inferred Activity from Banners */}
+                        {banners.filter(b => b.moderatorId === detailUser.id).map(b => (
+                           <tr key={`act-b-${b.id}`} className="text-xs font-bold hover:bg-gray-50 transition-colors">
+                              <td className="px-10 py-6"><span className="bg-orange-50 text-orange-600 px-2 py-1 rounded text-[9px] font-black uppercase">Banner Review</span></td>
+                              <td className="px-10 py-6 text-gray-900">{b.title}</td>
+                              <td className="px-10 py-6"><span className={`uppercase text-[9px] font-black ${b.status === 'LIVE' ? 'text-emerald-600' : 'text-rose-600'}`}>{b.status}</span></td>
+                              <td className="px-10 py-6 text-right text-gray-400 text-[10px] font-mono">Unknown</td>
+                           </tr>
+                        ))}
+                        {/* Inferred Activity from Reports */}
+                        {allReports.filter(r => r.moderatorId === detailUser.id).map(r => (
+                           <tr key={`act-r-${r.id}`} className="text-xs font-bold hover:bg-gray-50 transition-colors">
+                              <td className="px-10 py-6"><span className="bg-rose-50 text-rose-600 px-2 py-1 rounded text-[9px] font-black uppercase">Report Handling</span></td>
+                              <td className="px-10 py-6 text-gray-900">Report on: {r.listingTitle}</td>
+                              <td className="px-10 py-6"><span className={`uppercase text-[9px] font-black ${r.status === 'RESOLVED' ? 'text-emerald-600' : 'text-gray-400'}`}>{r.status}</span></td>
+                              <td className="px-10 py-6 text-right text-gray-400 text-[10px] font-mono">Unknown</td>
+                           </tr>
+                        ))}
+                        {/* Inferred Activity from Tickets */}
+                        {allTickets.filter(t => t.moderatorId === detailUser.id).map(t => (
+                           <tr key={`act-t-${t.id}`} className="text-xs font-bold hover:bg-gray-50 transition-colors">
+                              <td className="px-10 py-6"><span className="bg-blue-50 text-blue-600 px-2 py-1 rounded text-[9px] font-black uppercase">Support Ticket</span></td>
+                              <td className="px-10 py-6 text-gray-900">Ticket: {t.subject}</td>
+                              <td className="px-10 py-6"><span className={`uppercase text-[9px] font-black ${t.status === 'RESOLVED' ? 'text-emerald-600' : 'text-gray-400'}`}>{t.status}</span></td>
+                              <td className="px-10 py-6 text-right text-gray-400 text-[10px] font-mono">Unknown</td>
+                           </tr>
+                        ))}
+                        {listings.filter(l => l.moderatorId === detailUser.id).length === 0 && 
+                         banners.filter(b => b.moderatorId === detailUser.id).length === 0 && 
+                         allReports.filter(r => r.moderatorId === detailUser.id).length === 0 && 
+                         allTickets.filter(t => t.moderatorId === detailUser.id).length === 0 && (
+                           <tr><td colSpan={4} className="px-10 py-20 text-center text-gray-400 font-black uppercase text-xs italic">No recorded activity for this moderator yet.</td></tr>
                         )}
                      </tbody>
                   </table>

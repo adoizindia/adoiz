@@ -207,7 +207,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <button onClick={onPostNew} className="bg-blue-600 text-white px-8 py-4 rounded-2xl text-[10px] font-black uppercase tracking-widest shadow-xl shadow-blue-200">+ New Ad</button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-              {listings.map(l => (
+              {[...listings].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()).map(l => (
                 <div key={l.id} className="bg-white p-8 rounded-[3rem] border border-gray-100 flex gap-8 hover:shadow-2xl transition-all group">
                   <div className="w-40 h-40 rounded-3xl overflow-hidden flex-shrink-0">
                     <img src={l.images[0]} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" alt="" />
