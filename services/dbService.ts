@@ -307,6 +307,37 @@ class DbService {
     return this.request('/auth/register', { method: 'POST', body: JSON.stringify({ ...u, referralCode: undefined }) }, newUser);
   }
 
+  async syncExternalUser(externalUser: { email: string; name: string; photoURL?: string; provider: 'google' | 'facebook' }): Promise<User> {
+    const existingUser = this._users.find(u => u.email === externalUser.email);
+    if (existingUser) {
+      return existingUser;
+    }
+
+    const newUserId = `u-${Date.now()}`;
+    const myReferralCode = (externalUser.name?.substring(0, 3).toUpperCase() || 'USR') + Math.floor(1000 + Math.random() * 9000);
+
+    const newUser: User = {
+      ...MOCK_USER,
+      id: newUserId,
+      name: externalUser.name,
+      email: externalUser.email,
+      role: UserRole.USER,
+      mobile: '',
+      countryId: 'IN',
+      stateId: '',
+      cityId: '',
+      walletBalance: 0,
+      isVerified: false,
+      createdAt: new Date().toISOString(),
+      photo: externalUser.photoURL,
+      isSuspended: false,
+      socialProvider: externalUser.provider,
+      referralCode: myReferralCode
+    };
+    this._users.push(newUser);
+    return this.request('/auth/sync', { method: 'POST', body: JSON.stringify(newUser) }, newUser);
+  }
+
   async adminUpdateUser(id: string, data: Partial<User>, adminId: string): Promise<User | null> {
     const userIndex = this._users.findIndex(u => u.id === id);
     if (userIndex >= 0) {

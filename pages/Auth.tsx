@@ -85,6 +85,50 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, onGoogleLogin, onFacebookLo
     setLoading(null);
   };
 
+  const handleGoogleLogin = async () => {
+    setLoading('google');
+    // Simulate Google Login
+    setTimeout(async () => {
+      try {
+        const mockGoogleUser = {
+          email: 'google_user@example.com',
+          name: 'Google User',
+          photoURL: 'https://ui-avatars.com/api/?name=Google+User&background=random',
+          provider: 'google' as const
+        };
+        const appUser = await dbService.syncExternalUser(mockGoogleUser);
+        onLogin(appUser);
+      } catch (error: any) {
+        console.error(error);
+        alert("Google login failed: " + error.message);
+      } finally {
+        setLoading(null);
+      }
+    }, 1500);
+  };
+
+  const handleFacebookLogin = async () => {
+    setLoading('facebook');
+    // Simulate Facebook Login
+    setTimeout(async () => {
+      try {
+        const mockFacebookUser = {
+          email: 'facebook_user@example.com',
+          name: 'Facebook User',
+          photoURL: 'https://ui-avatars.com/api/?name=Facebook+User&background=random',
+          provider: 'facebook' as const
+        };
+        const appUser = await dbService.syncExternalUser(mockFacebookUser);
+        onLogin(appUser);
+      } catch (error: any) {
+        console.error(error);
+        alert("Facebook login failed: " + error.message);
+      } finally {
+        setLoading(null);
+      }
+    }, 1500);
+  };
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4 py-12 relative overflow-hidden">
       {/* Background Decor */}
@@ -103,12 +147,20 @@ export const Auth: React.FC<AuthProps> = ({ onLogin, onGoogleLogin, onFacebookLo
         </div>
 
         <div className="space-y-4 pt-4">
-          <button onClick={() => alert("Social login is currently disabled in this preview environment.")} disabled={!!loading} className="w-full flex items-center justify-between bg-white border border-gray-100 py-4 px-6 rounded-2xl hover:border-blue-500 transition-all shadow-sm active:scale-[0.98] disabled:opacity-50 group opacity-50 cursor-not-allowed">
+          <button onClick={handleGoogleLogin} disabled={!!loading} className="w-full flex items-center justify-between bg-white border border-gray-100 py-4 px-6 rounded-2xl hover:border-blue-500 transition-all shadow-sm active:scale-[0.98] disabled:opacity-50 group">
             <div className="flex items-center space-x-4">
-              <i className="fab fa-google text-gray-400"></i>
-              <span className="text-xs font-black text-gray-400 uppercase tracking-widest">Continue with Google (Disabled)</span>
+              <i className="fab fa-google text-red-500"></i>
+              <span className="text-xs font-black text-gray-600 uppercase tracking-widest">Continue with Google</span>
             </div>
-            <i className="fas fa-lock text-[10px] text-gray-300"></i>
+            {loading === 'google' ? <i className="fas fa-circle-notch fa-spin text-gray-400"></i> : <i className="fas fa-arrow-right text-[10px] text-gray-300 group-hover:text-blue-500 transition-colors"></i>}
+          </button>
+
+          <button onClick={handleFacebookLogin} disabled={!!loading} className="w-full flex items-center justify-between bg-white border border-gray-100 py-4 px-6 rounded-2xl hover:border-blue-500 transition-all shadow-sm active:scale-[0.98] disabled:opacity-50 group">
+            <div className="flex items-center space-x-4">
+              <i className="fab fa-facebook text-blue-600"></i>
+              <span className="text-xs font-black text-gray-600 uppercase tracking-widest">Continue with Facebook</span>
+            </div>
+            {loading === 'facebook' ? <i className="fas fa-circle-notch fa-spin text-gray-400"></i> : <i className="fas fa-arrow-right text-[10px] text-gray-300 group-hover:text-blue-500 transition-colors"></i>}
           </button>
         </div>
 
